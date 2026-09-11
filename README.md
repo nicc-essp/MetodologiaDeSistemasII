@@ -37,13 +37,36 @@ Los formularios de clientes se almacenan en una base de datos para que los aboga
 
 Pendiente. Cuando exista el código, documentar al menos:
 
-```text
 /
-├── frontend/          # Interfaz web
-├── backend/           # API Express
-├── docker-compose.yml
-└── README.md
-```
+├── backend/
+│   ├── config/              # Configuraciones globales (DB, variables de entorno, etc.)
+│   ├── controllers/         # Lógica de negocio y controladores de peticiones
+│   ├── middleware/          # Middlewares (autenticación, validaciones, errores)
+│   ├── migrations/          # Migraciones de base de datos
+│   ├── models/              # Definición de esquemas y modelos de datos
+│   ├── routes/              # Endpoints y definición de rutas de la API
+│   ├── seeders/             # Cargas iniciales de datos para desarrollo/pruebas
+│   ├── tests/               # Pruebas unitarias y de integración
+│   └── utils/               # Funciones auxiliares y herramientas reutilizables
+│
+├── frontend/
+│   ├── public/              # Archivos estáticos públicos
+│   └── src/
+│       ├── assets/          # Recursos multimedia
+│       │   ├── icons/       # Iconos SVG o componentes de iconos
+│       │   └── images/      # Imágenes estáticas
+│       ├── components/      # Componentes reutilizables
+│       │   ├── common/      # Componentes genéricos compartidos
+│       │   ├── layout/      # Estructuras de diseño (Navbar, Footer, Sidebar)
+│       │   └── ui/          # Elementos atómicos de UI (botones, inputs, modales)
+│       ├── hooks/           # Custom hooks
+│       ├── pages/           # Vistas o páginas principales de la aplicación
+│       ├── services/        # Llamadas a la API y clientes HTTP
+│       ├── styles/          # Hojas de estilo globales y temas
+│       └── utils/           # Funciones de soporte y formateadores frontend
+│
+├── docker-compose.yml       # Orquestación de contenedores
+└── README.md                # Documentación del proyecto
 
 Ajustar este árbol al layout real del repositorio.
 
