@@ -39,8 +39,6 @@ Los formularios de clientes se almacenan en una base de datos para que los aboga
 
 ## Estructura de archivos
 
-Pendiente. Cuando exista el código, documentar al menos:
-
 /
 ├── backend/
 │   ├── config/              # Configuraciones globales (DB, variables de entorno, etc.)
@@ -72,7 +70,7 @@ Pendiente. Cuando exista el código, documentar al menos:
 ├── docker-compose.yml       # Orquestación de contenedores
 └── README.md                # Documentación del proyecto
 
-Ajustar este árbol al layout real del repositorio.
+(Estructura prevista provicional)
 
 ## Instalación e inicio
 
