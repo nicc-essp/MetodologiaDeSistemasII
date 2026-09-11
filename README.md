@@ -23,6 +23,8 @@ Los formularios de clientes se almacenan en una base de datos para que los aboga
 | Control de versiones | Git Flow              | Ramas `main`, `develop`, `feature/*`, `hotfix/*`                             |
 
 
+
+
 ## Desarrollo
 
 - Node.js en frontend y backend.
@@ -32,6 +34,8 @@ Los formularios de clientes se almacenan en una base de datos para que los aboga
 - pnpm en lugar de npm.
 - Git Flow para organizar el trabajo en equipo.
 - Express + Sequelize para la API y el acceso a PostgreSQL.
+
+
 
 ## Estructura de archivos
 
@@ -72,7 +76,40 @@ Ajustar este árbol al layout real del repositorio.
 
 ## Instalación e inicio
 
+1. Clonar repositorio
 
+Ejemplo con https:
 
-## Licencia
+```bash
+git clone https://github.com/nicc-essp/MetodologiaDeSistemasII.git
+```
 
+1. Comprobar node y pnpm (en caso de no tenerlos, instalarlos según corresponda a su sistema)
+
+```bash
+node -v
+pnpm -v
+```
+
+1. Ir al frontend (página de muestra)
+
+```bash
+cd frontend
+```
+
+1. Instalar dependencias
+
+```bash
+pnpm install
+pnpm dev
+```
+
+1. Abrir [http://localhost:5173](http://localhost:5173) para acceder a la página local
+2. NO IMPLEMENTADO: Instalar dependencias backend
+
+```bash
+cd backend
+pnpm install
+```
+
+Por ahora no es posible acceder al backend
