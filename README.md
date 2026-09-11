@@ -84,28 +84,28 @@ Ejemplo con https:
 git clone https://github.com/nicc-essp/MetodologiaDeSistemasII.git
 ```
 
-1. Comprobar node y pnpm (en caso de no tenerlos, instalarlos según corresponda a su sistema)
+2. Comprobar node y pnpm (en caso de no tenerlos, instalarlos según corresponda a su sistema)
 
 ```bash
 node -v
 pnpm -v
 ```
 
-1. Ir al frontend (página de muestra)
+3. Ir al frontend (página de muestra)
 
 ```bash
 cd frontend
 ```
 
-1. Instalar dependencias
+4. Instalar dependencias
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-1. Abrir [http://localhost:5173](http://localhost:5173) para acceder a la página local
-2. NO IMPLEMENTADO: Instalar dependencias backend
+5. Abrir [http://localhost:5173](http://localhost:5173) para acceder a la página local
+6. NO IMPLEMENTADO: Instalar dependencias backend
 
 ```bash
 cd backend
