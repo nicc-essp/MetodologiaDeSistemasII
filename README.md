@@ -39,7 +39,7 @@ Los formularios de clientes se almacenan en una base de datos para que los aboga
 
 ## Estructura de archivos
 
-/
+```
 ├── backend/
 │   ├── config/              # Configuraciones globales (DB, variables de entorno, etc.)
 │   ├── controllers/         # Lógica de negocio y controladores de peticiones
@@ -69,6 +69,7 @@ Los formularios de clientes se almacenan en una base de datos para que los aboga
 │
 ├── docker-compose.yml       # Orquestación de contenedores
 └── README.md                # Documentación del proyecto
+```
 
 (Estructura prevista provicional)
 
