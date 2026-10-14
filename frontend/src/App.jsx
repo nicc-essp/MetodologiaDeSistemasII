@@ -1,50 +1,28 @@
-import ballenaImg from './assets/images/ballena.jpg'
-import './App.css'
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Navbar } from './components/layout/Navbar';
+import { Footer } from './components/layout/Footer';
+import { Home } from './pages/Home';
+import { ConsultaJuridica } from './pages/ConsultaJuridica';
+import './App.css';
 
 function App() {
   return (
-    <div className="page">
-      <header className="hero">
-        <img
-          src={ballenaImg}
-          className="logo"
-          width="180"
-          height="180"
-          alt="Ballena"
-        />
-        <h1>Docker-laws</h1>
-        <p className="tagline">Estudio jurídico</p>
-        <p>Página de demostración. El sitio está en construcción.</p>
-      </header>
-
-      <main>
+    <Router>
+      <div className="app-container">
+        <Navbar />
         
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/consulta-juridica" element={<ConsultaJuridica />} />
+          </Routes>
+        </main>
 
-        <section className="block">
-          <h2>Servicios</h2>
-          <ul className="services">
-            <li>Asesoría legal</li>
-            <li>Seguimiento de casos</li>
-            <li>Consultas a profesionales</li>
-          </ul>
-        </section>
-
-        <section className="block">
-          <h2>Contacto</h2>
-          <p>
-            Repositorio del proyecto:{' '}
-            <a
-              href="https://github.com/nicc-essp/MetodologiaDeSistemasII"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              GitHub
-            </a>
-          </p>
-        </section>
-      </main>
-    </div>
-  )
+        <Footer />
+      </div>
+    </Router>
+  );
 }
 
-export default App
+export default App;
