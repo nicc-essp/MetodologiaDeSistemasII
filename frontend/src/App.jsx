@@ -1,10 +1,11 @@
-import React from 'react';
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { Home } from './pages/Home';
 import { ConsultaJuridica } from './pages/ConsultaJuridica';
 import './App.css';
+import { ConsultasRecibidas } from './pages/ConsultasRecibidas';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         
         <main className="main-content">
           <Routes>
+            <Route path="/consultas" element={<ConsultasRecibidas />} />
             <Route path="/" element={<Home />} />
             <Route path="/consulta-juridica" element={<ConsultaJuridica />} />
           </Routes>
