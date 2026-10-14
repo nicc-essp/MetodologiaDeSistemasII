@@ -1,20 +1,22 @@
-
-
 const consultasMock = [
   {
     id: 1,
-    nombre: 'Juan Pérez',
-    email: 'juan@ejemplo.com',
+    nombre: 'Juan',
+    apellido: 'Pérez',
+    dni: '12345678',
     telefono: '291 4000000',
-    area: 'asesoria',
+    email: 'juan@ejemplo.com',
+    asunto: 'Consulta contractual',
     mensaje: 'Necesito asesoramiento sobre un contrato.'
   },
   {
     id: 2,
-    nombre: 'María González',
-    email: 'maria@ejemplo.com',
+    nombre: 'María',
+    apellido: 'González',
+    dni: '23456789',
     telefono: '291 4111111',
-    area: 'seguimiento',
+    email: 'maria@ejemplo.com',
+    asunto: 'Seguimiento de caso',
     mensaje: 'Quisiera conocer el estado de mi caso.'
   }
 ];
@@ -28,12 +30,15 @@ export function ConsultasRecibidas() {
 
         {consultasMock.map((consulta) => (
           <article key={consulta.id} className="consulta-card">
-            <h3>{consulta.nombre}</h3>
+            <h3>
+              {consulta.nombre} {consulta.apellido}
+            </h3>
 
-            <p><strong>Email:</strong> {consulta.email}</p>
+            <p><strong>DNI:</strong> {consulta.dni}</p>
             <p><strong>Teléfono:</strong> {consulta.telefono}</p>
-            <p><strong>Área:</strong> {consulta.area}</p>
-            <p><strong>Consulta:</strong> {consulta.mensaje}</p>
+            <p><strong>Email:</strong> {consulta.email}</p>
+            <p><strong>Asunto:</strong> {consulta.asunto}</p>
+            <p><strong>Mensaje:</strong> {consulta.mensaje}</p>
           </article>
         ))}
       </div>
