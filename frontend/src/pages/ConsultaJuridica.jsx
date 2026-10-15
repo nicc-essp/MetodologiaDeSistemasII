@@ -3,13 +3,13 @@ import { useState } from 'react';
 export function ConsultaJuridica() {
   const [formData, setFormData] = useState({
     nombre: '',
-    email: '',
+    apellido: '',
+    dni: '',
     telefono: '',
-    area: 'asesoria',
+    email: '',
+    asunto: '',
     mensaje: ''
   });
-
-  const [enviado, setEnviado] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -20,89 +20,112 @@ export function ConsultaJuridica() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log("Consulta formal enviada:", formData);
-    setEnviado(true);
 
-    setTimeout(() => {
-      setEnviado(false);
-      setFormData({ nombre: '', email: '', telefono: '', area: 'asesoria', mensaje: '' });
-    }, 5000);
+    console.log('Datos del formulario:', formData);
   };
 
   return (
     <section className="contact-section">
       <div className="contact-container">
         <h2>Formulario de Consulta Formal</h2>
-        <p>Complete los datos solicitados para iniciar su expediente o consulta con Docker-laws.</p>
+        <p>
+          Complete los datos solicitados para iniciar su expediente o consulta
+          con Docker-laws.
+        </p>
 
-        {enviado ? (
-          <div className="success-message">
-            <h3>¡Consulta enviada con éxito!</h3>
-            <p>Hemos recibido sus datos de forma segura. Nos pondremos en contacto a la brevedad.</p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="legal-form">
+        <form onSubmit={handleSubmit} className="legal-form">
+          <div className="form-row">
             <div className="form-group">
-              <label>Nombre y Apellido:</label>
-              <input 
-                type="text" 
-                name="nombre" 
-                value={formData.nombre} 
-                onChange={handleChange} 
-                required 
-                placeholder="Ej: Juan Pérez"
+              <label>Nombre:</label>
+              <input
+                type="text"
+                name="nombre"
+                value={formData.nombre}
+                onChange={handleChange}
+                required
+                placeholder="Ej: Juan"
               />
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Correo Electrónico:</label>
-                <input 
-                  type="email" 
-                  name="email" 
-                  value={formData.email} 
-                  onChange={handleChange} 
-                  required 
-                  placeholder="correo@ejemplo.com"
-                />
-              </div>
-              <div className="form-group">
-                <label>Teléfono / Celular:</label>
-                <input 
-                  type="tel" 
-                  name="telefono" 
-                  value={formData.telefono} 
-                  onChange={handleChange} 
-                  required 
-                  placeholder="291 4000000"
-                />
-              </div>
+            <div className="form-group">
+              <label>Apellido:</label>
+              <input
+                type="text"
+                name="apellido"
+                value={formData.apellido}
+                onChange={handleChange}
+                required
+                placeholder="Ej: Pérez"
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>DNI:</label>
+              <input
+                type="text"
+                name="dni"
+                value={formData.dni}
+                onChange={handleChange}
+                required
+                placeholder="Ej: 12345678"
+              />
             </div>
 
             <div className="form-group">
-              <label>Área de Interés:</label>
-              <select name="area" value={formData.area} onChange={handleChange}>
-                <option value="asesoria">Asesoría legal</option>
-                <option value="seguimiento">Seguimiento de casos</option>
-                <option value="profesionales">Consultas a profesionales</option>
-              </select>
+              <label>Teléfono / Celular:</label>
+              <input
+                type="tel"
+                name="telefono"
+                value={formData.telefono}
+                onChange={handleChange}
+                required
+                placeholder="291 4000000"
+              />
             </div>
+          </div>
 
-            <div className="form-group">
-              <label>Detalle del Caso:</label>
-              <textarea 
-                name="mensaje" 
-                rows="4" 
-                value={formData.mensaje} 
-                onChange={handleChange} 
-                required 
-                placeholder="Describa brevemente su situación..."
-              ></textarea>
-            </div>
+          <div className="form-group">
+            <label>Correo Electrónico:</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              required
+              placeholder="correo@ejemplo.com"
+            />
+          </div>
 
-            <button type="submit" className="btn-submit">Enviar Solicitud Formal</button>
-          </form>
-        )}
+          <div className="form-group">
+            <label>Asunto:</label>
+            <input
+              type="text"
+              name="asunto"
+              value={formData.asunto}
+              onChange={handleChange}
+              required
+              placeholder="Ej: Consulta contractual"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Detalle del Caso:</label>
+            <textarea
+              name="mensaje"
+              rows="4"
+              value={formData.mensaje}
+              onChange={handleChange}
+              required
+              placeholder="Describa brevemente su situación..."
+            ></textarea>
+          </div>
+
+          <button type="submit" className="btn-submit">
+            Enviar Solicitud Formal
+          </button>
+        </form>
       </div>
     </section>
   );
