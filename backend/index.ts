@@ -1,6 +1,6 @@
 import express from "express";
 import healthRouter from "./routes/health.routes";
-//import formularioRouter from "./routes/formulario.routes"; // TODO: Crear el router de formulario
+import formularioRouter from "./routes/formulario.routes";
 
 const app = express();
 const port = 3001;
@@ -12,4 +12,4 @@ app.listen(port, () => {
 });
 
 app.use("/health", healthRouter);
-//app.use("/formulario", formularioRouter); // TODO: Usar el router de formulario
+app.use("/formulario", formularioRouter);
