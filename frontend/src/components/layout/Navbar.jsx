@@ -1,4 +1,3 @@
-
 import { Link } from 'react-router-dom';
 
 export function Navbar() {
@@ -7,9 +6,13 @@ export function Navbar() {
       <div className="logo-nav">
         <h2>Docker-laws</h2>
       </div>
+
       <nav className="nav-links">
         <Link to="/">Inicio</Link>
-        <Link to="/consulta-juridica" className="btn-nav">Consulta Jurídica</Link>
+        <Link to="/consultas">Consultas Recibidas</Link>
+        <Link to="/consulta-juridica" className="btn-nav">
+          Consulta Jurídica
+        </Link>
       </nav>
     </header>
   );
