@@ -2,113 +2,230 @@
 
 ## Estudio jurídico Docker-laws
 
-Aplicación web full stack para el estudio jurídico ficticio **Docker-laws**.
+Aplicación web full stack desarrollada para el estudio jurídico ficticio **Docker-laws**.
 
-La aplicación ofrece información sobre servicios, casos, opiniones, profesionales y contactos del estudio. También permite enviar formularios para solicitar asesoría legal y un sistema de cuentas para que los clientes se comuniquen con sus representantes y sigan sus casos las 24 horas.
+El proyecto busca ofrecer información sobre los servicios del estudio y permitir que los clientes realicen consultas jurídicas desde la aplicación.
 
-Los formularios de clientes se almacenan en una base de datos para que los abogados puedan consultarlos desde la misma aplicación.
+Actualmente se encuentra implementado el flujo de formularios de consulta: un usuario puede completar y enviar una consulta desde el frontend, el backend puede recibirla y almacenarla provisionalmente, y las consultas recibidas pueden visualizarse desde otra sección de la aplicación.
+
+El proyecto se encuentra en desarrollo. Funcionalidades como persistencia mediante base de datos, cuentas de clientes y seguimiento de casos forman parte de la evolución prevista del sistema.
+
+## Estado actual
+
+Actualmente se encuentran implementadas:
+
+- Interfaz web desarrollada con React y Vite.
+- Formulario de consultas jurídicas.
+- API desarrollada con Express.
+- Creación de formularios mediante `POST /formulario`.
+- Consulta de todos los formularios mediante `GET /formulario`.
+- Consulta de un formulario mediante `GET /formulario/:id`.
+- Endpoint de estado del backend mediante `GET /health`.
+- Vista de consultas recibidas conectada a la API.
+- Separación de las llamadas HTTP del frontend mediante `formularioService.js`.
+- Configuración de CORS para la comunicación entre frontend y backend.
+- Ejecución conjunta de frontend y backend mediante Docker Compose.
+
+Actualmente los formularios se almacenan **provisionalmente en memoria** en el backend. Por lo tanto, los datos creados durante la ejecución se pierden al reiniciar el servidor.
 
 ## Stack tecnológico
 
+| Área | Tecnología | Uso |
+| --- | --- | --- |
+| Frontend | React + Vite | Interfaz de usuario |
+| Backend | Node.js + Express | API HTTP y lógica del servidor |
+| Contenedores | Docker + Docker Compose | Ejecución reproducible de frontend y backend |
+| Paquetes | pnpm | Gestión de dependencias |
+| Control de versiones | Git / GitHub | Desarrollo mediante ramas y Pull Requests |
 
-| Área                 | Tecnología            | Uso                                                                          |
-| -------------------- | --------------------- | ---------------------------------------------------------------------------- |
-| Frontend y backend   | Node.js               | Mismo ecosistema en cliente y servidor                                       |
-| Base de datos        | Supabase (PostgreSQL) | Persistencia de formularios, usuarios y casos                                |
-| API                  | Express               | Servidor HTTP y rutas                                                        |
-| ORM                  | Sequelize             | Modelos y acceso a la base de datos                                          |
-| Contenedores         | Docker                | Aislamiento de la API y despliegues reproducibles                            |
-| HTTPS                | Caddy                 | Proxy inverso y certificados                                                 |
-| Paquetes             | pnpm                  | Instalación más rápida, menos espacio en disco y `node_modules` más estricto |
-| Control de versiones | Git Flow              | Ramas `main`, `develop`, `feature/*`, `hotfix/*`                             |
+### Tecnologías previstas
 
+Como parte de la evolución del proyecto se prevé incorporar:
 
+- **Supabase (PostgreSQL)** para persistencia.
+- **Sequelize** para acceso y modelado de datos.
+- **Caddy** como proxy inverso y para configuración HTTPS.
+- Sistema de cuentas de clientes.
+- Seguimiento de casos y comunicación con representantes.
 
+Estas funcionalidades todavía no forman parte de la implementación actual.
 
-## Desarrollo
+## Estructura principal
 
-- Node.js en frontend y backend.
-- Supabase como base de datos.
-- Docker para aislar la API y desplegar en entornos controlados.
-- Caddy, junto con Docker, para HTTPS.
-- pnpm en lugar de npm.
-- Git Flow para organizar el trabajo en equipo.
-- Express + Sequelize para la API y el acceso a PostgreSQL.
-
-
-
-## Estructura de archivos
-
-```
+```text
 ├── backend/
-│   ├── config/              # Configuraciones globales (DB, variables de entorno, etc.)
-│   ├── controllers/         # Lógica de negocio y controladores de peticiones
-│   ├── middleware/          # Middlewares (autenticación, validaciones, errores)
-│   ├── migrations/          # Migraciones de base de datos
-│   ├── models/              # Definición de esquemas y modelos de datos
-│   ├── routes/              # Endpoints y definición de rutas de la API
-│   ├── seeders/             # Cargas iniciales de datos para desarrollo/pruebas
-│   ├── tests/               # Pruebas unitarias y de integración
-│   └── utils/               # Funciones auxiliares y herramientas reutilizables
+│   ├── controllers/          # Controladores de las peticiones HTTP
+│   ├── data/                 # Almacenamiento provisional de datos
+│   ├── models/               # Modelos y contratos de datos
+│   ├── routes/               # Rutas de la API
+│   ├── Dockerfile            # Imagen Docker del backend
+│   ├── index.ts              # Configuración y entrada del servidor
+│   └── package.json
 │
 ├── frontend/
-│   ├── public/              # Archivos estáticos públicos
-│   └── src/
-│       ├── assets/          # Recursos multimedia
-│       │   ├── icons/       # Iconos SVG o componentes de iconos
-│       │   └── images/      # Imágenes estáticas
-│       ├── components/      # Componentes reutilizables
-│       │   ├── common/      # Componentes genéricos compartidos
-│       │   ├── layout/      # Estructuras de diseño (Navbar, Footer, Sidebar)
-│       │   └── ui/          # Elementos atómicos de UI (botones, inputs, modales)
-│       ├── hooks/           # Custom hooks
-│       ├── pages/           # Vistas o páginas principales de la aplicación
-│       ├── services/        # Llamadas a la API y clientes HTTP
-│       ├── styles/          # Hojas de estilo globales y temas
-│       └── utils/           # Funciones de soporte y formateadores frontend
+│   ├── public/               # Archivos públicos
+│   ├── src/
+│   │   ├── assets/           # Recursos multimedia
+│   │   ├── components/       # Componentes reutilizables
+│   │   ├── pages/            # Vistas principales
+│   │   ├── services/         # Comunicación con la API
+│   │   └── styles/           # Estilos
+│   ├── Dockerfile            # Imagen Docker del frontend
+│   └── package.json
 │
-├── docker-compose.yml       # Orquestación de contenedores
-└── README.md                # Documentación del proyecto
+├── docs/
+│   └── decisiones-diseno.md  # Análisis y decisiones de diseño
+│
+├── docker-compose.yml        # Orquestación de frontend y backend
+└── README.md
 ```
-
-(Estructura prevista provicional)
 
 ## Instalación e inicio
 
-1. Clonar repositorio
+### Opción recomendada: Docker
 
-Ejemplo con https:
+#### 1. Clonar el repositorio
 
 ```bash
 git clone https://github.com/nicc-essp/MetodologiaDeSistemasII.git
+cd MetodologiaDeSistemasII
 ```
 
-2. Comprobar node y pnpm (en caso de no tenerlos, instalarlos según corresponda a su sistema)
+#### 2. Construir e iniciar la aplicación
+
+Con Docker instalado y en ejecución:
 
 ```bash
-node -v
-pnpm -v
+docker compose up --build
 ```
 
-3. Ir al frontend (página de muestra)
+Docker Compose inicia ambos servicios:
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:3001`
+
+Para detenerlos:
 
 ```bash
-cd frontend
+docker compose down
 ```
 
-4. Instalar dependencias
+## Ejecución sin Docker
+
+También es posible ejecutar cada parte del proyecto por separado.
+
+### Frontend
 
 ```bash
-pnpm install
-pnpm dev
+pnpm --dir frontend install
+pnpm --dir frontend dev
 ```
 
-5. Abrir [http://localhost:5173](http://localhost:5173) para acceder a la página local
-6. NO IMPLEMENTADO: Instalar dependencias backend
+El frontend estará disponible en:
+
+```text
+http://localhost:5173
+```
+
+### Backend
 
 ```bash
-cd backend
-pnpm install
+pnpm --dir backend install
+pnpm --dir backend start
 ```
 
-Por ahora no es posible acceder al backend
+El backend estará disponible en:
+
+```text
+http://localhost:3001
+```
+
+## API de formularios
+
+### Estado del backend
+
+```http
+GET /health
+```
+
+Permite comprobar que el servidor está funcionando.
+
+### Obtener formularios
+
+```http
+GET /formulario
+```
+
+Devuelve los formularios almacenados actualmente.
+
+### Obtener formulario por ID
+
+```http
+GET /formulario/:id
+```
+
+Devuelve el formulario correspondiente al ID indicado.
+
+Si no existe, el backend responde con estado `404`.
+
+### Crear formulario
+
+```http
+POST /formulario
+```
+
+El cuerpo esperado contiene:
+
+```json
+{
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "dni": "12345678",
+  "telefono": "2914000000",
+  "email": "juan@ejemplo.com",
+  "asunto": "Consulta contractual",
+  "mensaje": "Necesito asesoramiento sobre un contrato."
+}
+```
+
+El `id` no es ingresado por el usuario: es generado por el backend.
+
+Si faltan campos obligatorios, el backend responde con estado `400`.
+
+## Flujo actual de formularios
+
+El flujo implementado es:
+
+```text
+ConsultaJuridica.jsx
+        │
+        ▼
+formularioService.js
+        │
+        ▼
+POST /formulario
+        │
+        ▼
+Backend / almacenamiento provisional
+        │
+        ▼
+GET /formulario
+        │
+        ▼
+formularioService.js
+        │
+        ▼
+ConsultasRecibidas.jsx
+```
+
+Las vistas del frontend no realizan directamente las peticiones HTTP. Las operaciones relacionadas con formularios se encuentran centralizadas en `frontend/src/services/formularioService.js`.
+
+## Documentación de diseño
+
+Las decisiones de diseño y mantenibilidad analizadas durante el desarrollo se encuentran documentadas en:
+
+```text
+docs/decisiones-diseno.md
+```
+
+Allí se documentan el código analizado, diagnóstico, alternativas consideradas, decisiones tomadas, evidencia y trade-offs.
