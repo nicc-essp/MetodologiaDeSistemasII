@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { crearFormulario } from '../services/formularioService';
 
 export function ConsultaJuridica() {
   const [formData, setFormData] = useState({
@@ -11,6 +12,10 @@ export function ConsultaJuridica() {
     mensaje: ''
   });
 
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [error, setError] = useState('');
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -18,16 +23,40 @@ export function ConsultaJuridica() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    console.log('Datos del formulario:', formData);
+    setEnviando(true);
+    setEnviado(false);
+    setError('');
+
+    try {
+      await crearFormulario(formData);
+
+      setEnviado(true);
+
+      setFormData({
+        nombre: '',
+        apellido: '',
+        dni: '',
+        telefono: '',
+        email: '',
+        asunto: '',
+        mensaje: ''
+      });
+    } catch (error) {
+      console.error(error);
+      setError('No se pudo enviar la consulta. Intente nuevamente.');
+    } finally {
+      setEnviando(false);
+    }
   };
 
   return (
     <section className="contact-section">
       <div className="contact-container">
         <h2>Formulario de Consulta Formal</h2>
+
         <p>
           Complete los datos solicitados para iniciar su expediente o consulta
           con Docker-laws.
@@ -122,9 +151,21 @@ export function ConsultaJuridica() {
             ></textarea>
           </div>
 
-          <button type="submit" className="btn-submit">
-            Enviar Solicitud Formal
+          <button
+            type="submit"
+            className="btn-submit"
+            disabled={enviando}
+          >
+            {enviando ? 'Enviando...' : 'Enviar Solicitud Formal'}
           </button>
+
+          {enviado && (
+            <p>La consulta fue enviada correctamente.</p>
+          )}
+
+          {error && (
+            <p>{error}</p>
+          )}
         </form>
       </div>
     </section>
