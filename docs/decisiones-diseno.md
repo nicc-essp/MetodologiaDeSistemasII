@@ -265,7 +265,7 @@ En frontend se eligieron Vitest 5.1.0, jsdom 31.0.1 y cuatro paquetes Testing Li
 
 El perfil TypeScript incluye fuentes, pruebas y helpers, con strict, noEmit y skipLibCheck false. El tipo Node directo se alineó con la familia 22 (22.20.0); se inspeccionaron transitivas sin imponer overrides. La prueba negativa usa el script y configuración reales, comprueba el inventario y exige TS2322 en una copia temporal fiel. Verifica huellas de los originales y limpia solo su temporal.
 
-Los comandos de prueba, tipos, lint y build están en README. Se distinguen pruebas ejecutadas, pruebas manuales pendientes y verificaciones de Docker; no se exige TDD estricto ni un porcentaje arbitrario de cobertura.
+Los comandos de prueba, tipos, lint y build están en README. Se distinguen las pruebas automatizadas ejecutadas, la revisión manual del prototipo confirmada por el usuario y las verificaciones de Docker; las interfaces y funcionalidades nuevas requerirán revisiones propias. No se exige TDD estricto ni un porcentaje arbitrario de cobertura.
 
 ## 5. Errores útiles y formulario accesible
 
@@ -273,7 +273,7 @@ El servicio conserva sus tres operaciones y valida el estado HTTP y la forma mí
 
 Las vistas conservan valores ante error, permiten un nuevo intento manual y limpian solo tras creación confirmada. Los siete controles tienen `id` y `htmlFor`; se mantienen controles nativos y orden normal de foco. Las regiones `status` y `alert` comunican cambios sin depender del color. El aviso de envío queda fuera del formulario ocupado para permitir anunciar el progreso.
 
-Testing Library verifica nombres, activación de etiquetas, tabulación, estados y navegación, incluidos fallos. Esta evidencia no acredita anuncios percibidos en un lector real: la revisión manual con navegador y tecnología de asistencia permanece pendiente. No se promete conformidad completa con una norma de accesibilidad.
+Testing Library verifica nombres, activación de etiquetas, tabulación, estados y navegación, incluidos fallos. Esa evidencia automatizada no acredita por sí sola anuncios percibidos en un lector real. La revisión manual del prototipo fue completada satisfactoriamente por el usuario con Chrome y Narrador de Windows en Windows 10, después de las correcciones de CORS y de la CLI Docker. El usuario confirmó teclado, foco visible, identificación de los siete campos, validación, anuncios de pendiente/éxito/error, conservación de campos ante fallos, limpieza solo tras éxito y navegación por consultas, incluido un fallo de red con el backend detenido. Es evidencia humana aportada por el usuario, no una evaluación realizada por Codex ni una prueba nueva de esta actualización documental. Las pantallas o funcionalidades nuevas y los cambios en esos flujos requerirán revisiones propias. No se promete conformidad completa con una norma de accesibilidad.
 
 ## 6. Configuración pública y exclusiones Docker
 
@@ -283,6 +283,6 @@ Los Dockerfiles y el entorno de desarrollo se conservan. Ambos `.dockerignore` e
 
 `scripts/verificar-docker.mjs` utiliza Node, Docker/Buildx y tar del sistema. Comprueba la política con 24 fixtures UUID ficticios por componente y controles públicos; después inspecciona configuración y todas las capas guardadas con `image save --output`. Las autopruebas verifican fugas deliberadas, incluso en una capa borrada después, y errores cerrados. El formato OCI de Docker 29 incluye procedencia JSON; se inspecciona explícitamente en lugar de omitirla.
 
-Se verificaron contextos e imágenes reales de ambos componentes y un proyecto Compose de prueba propio con defaults y destino/origen 127.0.0.1. HTTP, configuración pública de Vite y reinicio real del backend conservaron el comportamiento esperado; se retiraron los recursos propios. La prueba de cabeceras no sustituye CORS efectivo en un navegador real, pendiente junto con la revisión manual de accesibilidad.
+Se verificaron contextos e imágenes reales de ambos componentes y un proyecto Compose de prueba propio con defaults y destino/origen 127.0.0.1. HTTP, configuración pública de Vite y reinicio real del backend conservaron el comportamiento esperado; se retiraron los recursos propios. La prueba de cabeceras no sustituye la comprobación de CORS efectivo en un navegador real. El usuario confirmó posteriormente el protocolo del prototipo con Chrome y Narrador en localhost y 127.0.0.1, incluida esa comprobación. Esta evidencia humana complementa las verificaciones automatizadas existentes; no se repitieron durante esta actualización ni acreditan funcionalidades futuras.
 
 El costo de esta verificación es necesitar Docker/Buildx/tar y tiempo de construcción/inspección. Su cobertura se limita a categorías y formatos ensayados. No se incorporan base de datos, autenticación, proxy, TLS ni despliegue productivo; el prototipo continúa destinado a demostración con datos ficticios.
