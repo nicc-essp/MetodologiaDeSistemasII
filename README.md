@@ -252,7 +252,9 @@ node scripts/verificar-docker.mjs --modo imagenes
 
 El selector opcional `--componente backend` o `--componente frontend` permite comprobar una política por separado. El verificador copia únicamente fuentes públicas a temporales propios, introduce fixtures sintéticos, comprueba el contexto filtrado y las configuraciones/capas de las imágenes, e incluye controles positivos de fuga. No usa credenciales reales y falla si una herramienta o formato no puede verificarse. Las exclusiones cubren las categorías ensayadas; no constituyen un detector universal de secretos.
 
-Las etiquetas, el teclado y las regiones de estado tienen pruebas automatizadas. **La revisión manual de anuncios con navegador y lector de pantalla reales sigue pendiente**; jsdom no la reemplaza. El prototipo conserva memoria volátil y acceso sin autenticación: utilizar exclusivamente datos sintéticos, sin publicación con datos personales reales.
+Las etiquetas, el teclado y las regiones de estado tienen pruebas automatizadas. **La revisión manual de accesibilidad del prototipo refactorizado fue completada satisfactoriamente por el usuario con Chrome y Narrador de Windows, en Windows 10.** El usuario confirmó teclado, foco visible, identificación de los siete campos, validación, anuncios de pendiente/éxito/error y navegación por consultas, incluidos fallos de red, con datos ficticios en localhost y 127.0.0.1. Esta evidencia humana complementa las pruebas automatizadas; jsdom no la reemplaza.
+
+Las nuevas pantallas o funcionalidades y los cambios en los flujos afectados requerirán sus propias revisiones de accesibilidad; la revisión del prototipo no acredita resultados futuros ni conformidad completa con una norma. El prototipo conserva memoria volátil y acceso sin autenticación: utilizar exclusivamente datos sintéticos, sin publicación con datos personales reales.
 
 ## Flujo actual de formularios
 
