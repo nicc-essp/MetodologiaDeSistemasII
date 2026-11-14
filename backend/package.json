@@ -5,7 +5,8 @@
   "main": "index.ts",
   "scripts": {
     "start": "tsx index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --import tsx --test tests/formulario.validation.test.ts tests/formularios-guardados.test.ts tests/formulario.http.test.ts tests/app.test.ts tests/app.config.test.ts tests/typecheck.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "keywords": [],
   "author": "",
@@ -26,7 +27,7 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.6.5",
+    "@types/node": "22.20.0",
     "nodemon": "^3.1.14",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"

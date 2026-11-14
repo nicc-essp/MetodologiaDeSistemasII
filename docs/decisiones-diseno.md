@@ -244,3 +244,45 @@ La compatibilidad del contrato fue comprobada mediante una prueba de integració
 - Frontend y backend quedan vinculados a un contrato que deberá mantenerse de forma coordinada cuando cambie.
 
 Se consideró que estos costos son menores que mantener representaciones incompatibles del mismo concepto dentro del sistema.
+
+## 3. Preparación de aplicación, validación y memoria aislada
+
+Los apartados anteriores conservan el registro histórico. Las decisiones siguientes corresponden a la corrección de deuda técnica verificada el 14 de noviembre de 2026.
+
+El controlador anterior mezclaba transporte, validación, parseo JSON y generación de IDs. Ahora `backend/app.ts` prepara Express sin escuchar; `index.ts` valida configuración e inicia el servidor. El router entrega un almacén al controlador, que coordina un validador puro y las operaciones de datos.
+
+`validarFormulario(unknown)` comprueba estructura, presencia, tipos y correo mínimo antes de producir los siete campos conocidos. El almacén conserva objetos en un arreglo privado por instancia, genera máximo ID + 1 y devuelve copias. Las conversiones JSON permanecen únicamente en el transporte. Se conserva el seed y la pérdida de consultas al reiniciar.
+
+Se descartaron un servicio que solo delegara, un Repository genérico y un contenedor de dependencias: las tres operaciones actuales no justifican esas capas. Las factorías y la colaboración explícita permiten aislar pruebas; no acreditan por sí solas un patrón GoF. El costo es mantener firmas entre módulos y copiar registros escalares al entrar/salir.
+
+La evidencia automatizada comprueba creación/listado/detalle, mensajes y estados históricos, IDs, copias y aislamiento. La matriz de entradas inválidas verifica registros y siguiente ID después de cada rechazo. El límite sigue siendo 102400 bytes con respuesta 413; los errores nuevos conservan `message` y no revelan cuerpos ni trazas.
+
+## 4. Pruebas automatizadas y comprobación estática
+
+Se reutilizaron `node:test`, `assert`, `fetch` y tsx en backend; no se agregó un runner. Un helper abre explícitamente `127.0.0.1:0` y garantiza el cierre. Su prueba sintética es independiente de Express; otras pruebas comprueban su integración y que preparar la app no inicia escucha.
+
+En frontend se eligieron Vitest 5.1.0, jsdom 31.0.1 y cuatro paquetes Testing Library para probar comportamiento, roles y teclado sin requerir un navegador instalado. Los seis paquetes son dependencias de desarrollo; no se añadieron dependencias runtime. Su costo incluye transitivas y mayor imagen de desarrollo. Se comprobaron engines/peers antes de instalar y se conservaron React/Vite/Express/TypeScript.
+
+El perfil TypeScript incluye fuentes, pruebas y helpers, con strict, noEmit y skipLibCheck false. El tipo Node directo se alineó con la familia 22 (22.20.0); se inspeccionaron transitivas sin imponer overrides. La prueba negativa usa el script y configuración reales, comprueba el inventario y exige TS2322 en una copia temporal fiel. Verifica huellas de los originales y limpia solo su temporal.
+
+Los comandos de prueba, tipos, lint y build están en README. Se distinguen pruebas ejecutadas, pruebas manuales pendientes y verificaciones de Docker; no se exige TDD estricto ni un porcentaje arbitrario de cobertura.
+
+## 5. Errores útiles y formulario accesible
+
+El servicio conserva sus tres operaciones y valida el estado HTTP y la forma mínima de las respuestas. Solo comunica mensajes de cliente conocidos; red, servidor, protocolo y configuración utilizan explicaciones locales seguras. No hay reintentos automáticos: una respuesta perdida no demuestra que el servidor no registró la consulta.
+
+Las vistas conservan valores ante error, permiten un nuevo intento manual y limpian solo tras creación confirmada. Los siete controles tienen `id` y `htmlFor`; se mantienen controles nativos y orden normal de foco. Las regiones `status` y `alert` comunican cambios sin depender del color. El aviso de envío queda fuera del formulario ocupado para permitir anunciar el progreso.
+
+Testing Library verifica nombres, activación de etiquetas, tabulación, estados y navegación, incluidos fallos. Esta evidencia no acredita anuncios percibidos en un lector real: la revisión manual con navegador y tecnología de asistencia permanece pendiente. No se promete conformidad completa con una norma de accesibilidad.
+
+## 6. Configuración pública y exclusiones Docker
+
+`VITE_API_BASE_URL` conserva localhost por defecto y admite una base HTTP(S) pública con prefijo; se resuelve al operar. `CORS_ORIGINS` admite una lista explícita de orígenes. Una configuración inválida no cae silenciosamente a otro destino; CORS no se presenta como autorización. Compose transmite ambas variables al proceso y no entrega credenciales al navegador.
+
+Los Dockerfiles y el entorno de desarrollo se conservan. Ambos `.dockerignore` excluyen archivos de entorno, credenciales y claves de las categorías acordadas, en raíz y directorios anidados, sin excluir manifiestos ni todos los JSON.
+
+`scripts/verificar-docker.mjs` utiliza Node, Docker/Buildx y tar del sistema. Comprueba la política con 24 fixtures UUID ficticios por componente y controles públicos; después inspecciona configuración y todas las capas guardadas con `image save --output`. Las autopruebas verifican fugas deliberadas, incluso en una capa borrada después, y errores cerrados. El formato OCI de Docker 29 incluye procedencia JSON; se inspecciona explícitamente en lugar de omitirla.
+
+Se verificaron contextos e imágenes reales de ambos componentes y un proyecto Compose de prueba propio con defaults y destino/origen 127.0.0.1. HTTP, configuración pública de Vite y reinicio real del backend conservaron el comportamiento esperado; se retiraron los recursos propios. La prueba de cabeceras no sustituye CORS efectivo en un navegador real, pendiente junto con la revisión manual de accesibilidad.
+
+El costo de esta verificación es necesitar Docker/Buildx/tar y tiempo de construcción/inspección. Su cobertura se limita a categorías y formatos ensayados. No se incorporan base de datos, autenticación, proxy, TLS ni despliegue productivo; el prototipo continúa destinado a demostración con datos ficticios.

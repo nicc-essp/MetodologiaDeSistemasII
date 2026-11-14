@@ -8,3 +8,5 @@ export interface Formulario {
   asunto: string;
   mensaje: string;
 }
+
+export type EntradaFormulario = Omit<Formulario, 'id'>;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { obtenerFormularios } from '../services/formularioService';
+import { obtenerFormularios, obtenerMensajeError } from '../services/formularioService';
 
 export function ConsultasRecibidas() {
   const [consultas, setConsultas] = useState([]);
@@ -12,8 +12,7 @@ export function ConsultasRecibidas() {
         const formularios = await obtenerFormularios();
         setConsultas(formularios);
       } catch (error) {
-        console.error(error);
-        setError('No se pudieron cargar las consultas.');
+        setError(obtenerMensajeError(error, 'listado'));
       } finally {
         setCargando(false);
       }
@@ -28,13 +27,12 @@ export function ConsultasRecibidas() {
         <h2>Consultas recibidas</h2>
         <p>Formularios enviados por los clientes.</p>
 
-        {cargando && <p>Cargando consultas...</p>}
-
-        {error && <p>{error}</p>}
-
-        {!cargando && !error && consultas.length === 0 && (
-          <p>No hay consultas recibidas.</p>
-        )}
+        <p role="status">
+          {cargando ? 'Cargando consultas...' : !error
+            ? consultas.length === 0 ? 'No hay consultas recibidas.' : 'Consultas cargadas.'
+            : ''}
+        </p>
+        {error && <p role="alert">{error}</p>}
 
         {consultas.map((consulta) => (
           <article key={consulta.id} className="consulta-card">
