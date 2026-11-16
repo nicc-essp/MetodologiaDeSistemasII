@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setImmediate } from 'node:timers/promises';
 import { createApp } from '../app';
 import { crearAlmacenFormularios } from '../data/formularios-guardados';
+import type { AlmacenFormularios } from '../data/formularios-guardados';
 import { withHttp } from './helpers/http';
 import { consultaFicticia } from './helpers/fixtures';
 
@@ -39,9 +41,49 @@ test('HTTP: creación, listado, detalle, extras ignorados y health', async () =>
   });
 });
 
+test('HTTP espera el almacenamiento asíncrono en creación, listado y búsqueda', { timeout: 5000 }, async t => {
+  const formulario = { id: 7, ...consultaFicticia };
+  const llamadas: string[] = [];
+  const almacen: AlmacenFormularios = {
+    async listar() {
+      await setImmediate();
+      llamadas.push('listar');
+      return [formulario];
+    },
+    async buscar(id) {
+      await setImmediate();
+      llamadas.push(`buscar:${id}`);
+      return id === 7 ? formulario : undefined;
+    },
+    async crear(entrada) {
+      await setImmediate();
+      assert.deepEqual(entrada, consultaFicticia);
+      llamadas.push('crear');
+      return formulario;
+    },
+  };
+  await withHttp(createApp({ almacen }), async base => {
+    for (const caso of [
+      { method: 'GET', ruta: '/formulario', status: 200, respuesta: [formulario] },
+      { method: 'GET', ruta: '/formulario/7', status: 200, respuesta: formulario },
+      { method: 'GET', ruta: '/formulario/999', status: 404, respuesta: { message: 'Formulario no encontrado' } },
+      { method: 'POST', ruta: '/formulario', status: 201, respuesta: formulario },
+    ]) {
+      const response = await fetch(`${base}${caso.ruta}`, {
+        method: caso.method, signal: t.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: caso.method === 'POST' ? JSON.stringify(consultaFicticia) : undefined,
+      });
+      assert.equal(response.status, caso.status);
+      assert.deepEqual(await response.json(), caso.respuesta);
+    }
+  });
+  assert.deepEqual(llamadas, ['listar', 'buscar:7', 'buscar:999', 'crear']);
+});
+
 async function comprobarRechazo(body: string | undefined, status = 400, contentType = 'application/json') {
   const almacen = crearAlmacenFormularios([{ id: 7, ...consultaFicticia }]);
-  const antes = almacen.listar();
+  const antes = await almacen.listar();
   await withHttp(createApp({ almacen }), async base => {
     const response = await fetch(`${base}/formulario`, {
       method: 'POST', headers: { 'Content-Type': contentType }, body,
@@ -51,7 +93,7 @@ async function comprobarRechazo(body: string | undefined, status = 400, contentT
     assert.ok(error && typeof error === 'object' && 'message' in error);
     assert.equal(typeof error.message, 'string');
     assert.deepEqual(Object.keys(error), ['message']);
-    assert.deepEqual(almacen.listar(), antes);
+    assert.deepEqual(await almacen.listar(), antes);
     assert.deepEqual(await (await fetch(`${base}/formulario`)).json(), antes);
     const siguiente = await fetch(`${base}/formulario`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(consultaFicticia),
@@ -121,9 +163,36 @@ test('HTTP conserva 415 del parser y oculta detalles internos en 500', async () 
     });
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { message: 'Error interno del servidor' });
-    assert.deepEqual(almacen.listar(), []);
+    assert.deepEqual(await almacen.listar(), []);
   });
 });
+
+for (const [operacion, method, ruta] of [
+  ['listar', 'GET', '/formulario'],
+  ['buscar', 'GET', '/formulario/1'],
+  ['crear', 'POST', '/formulario'],
+] as const) {
+  test(`HTTP propaga el rechazo asíncrono de ${operacion} sin filtrar detalles`, { timeout: 5000 }, async t => {
+    const almacen = crearAlmacenFormularios([]);
+    const conFallo: AlmacenFormularios = {
+      ...almacen,
+      async [operacion]() {
+        await setImmediate();
+        throw new Error('detalle interno ficticio');
+      },
+    };
+    await withHttp(createApp({ almacen: conFallo }), async base => {
+      const response = await fetch(`${base}${ruta}`, {
+        method, signal: t.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: method === 'POST' ? JSON.stringify(consultaFicticia) : undefined,
+      });
+      assert.equal(response.status, 500);
+      assert.deepEqual(await response.json(), { message: 'Error interno del servidor' });
+      assert.deepEqual(await almacen.listar(), []);
+    });
+  });
+}
 
 test('HTTP CORS: permitidos, denegados, preflight y sin Origin', async () => {
   for (const origen of ['http://localhost:5173', 'http://127.0.0.1:5173']) {
