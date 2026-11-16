@@ -137,6 +137,8 @@ docker compose down
 
 P03 está completada y aprobada. P04.2 incorpora modelo y migración; P04.3 conecta el arranque normal y la API con PostgreSQL. Las pruebas siguen pudiendo inyectar memoria en `createApp`. Ver [conexión, migraciones y arranque](backend/database/README.md).
 
+P04.4a prepara la selección explícita `local`/`supabase-dev`, los usuarios directos o session pooler y TLS con CA y comprobación de nombre. Compose conserva exclusivamente el entorno local. La preparación y los comandos futuros están en la [guía de configuración](backend/database/README.md#p044a--perfiles-locales-preparados-sin-conexión-a-supabase); **no se ha validado todavía una conexión real con Supabase**. No ejecutar migraciones remotas ni reutilizar allí las suites locales de pruebas sin la autorización correspondiente.
+
 Se utiliza `postgres:17.12-bookworm`, fijado por [digest del índice oficial de imágenes](https://github.com/docker-library/repo-info/blob/master/repos/postgres/remote/17.12-bookworm.md). El servicio de desarrollo tiene un volumen nombrado `postgres_dev_data`, gestionado por Compose. Frontend, backend y PostgreSQL publican puertos únicamente en `127.0.0.1`.
 
 Preparar claves locales aleatorias e iniciar solo PostgreSQL:

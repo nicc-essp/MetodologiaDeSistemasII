@@ -7,6 +7,7 @@ export function crearConexionPostgres(config: ConfiguracionPostgres): Sequelize 
     logging: false,
     retry: { max: 0 },
     pool: { min: 0, max: 2, acquire: 5000, idle: 1000 },
-    dialectOptions: { connectionTimeoutMillis: 5000 },
+    // Explícito también en local: no heredar PGSSLMODE ni aceptar TLS sin verificar.
+    dialectOptions: { connectionTimeoutMillis: 5000, ssl: config.ssl },
   });
 }

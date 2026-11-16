@@ -25,6 +25,17 @@ export function leerComando(args: readonly string[]): 'up' | 'status' {
   return args[0];
 }
 
+export function leerConfiguracionMigracion(args: readonly string[], env: NodeJS.ProcessEnv = process.env) {
+  if (env.POSTGRES_TARGET === 'supabase-dev') {
+    if (args.length !== 3 || args[0] !== 'up' || args[1] !== '--supabase-project'
+      || !/^[a-z0-9]{20}$/.test(args[2] ?? '') || args[2] !== env.SUPABASE_PROJECT_REF) {
+      throw new Error('Supabase requiere up --supabase-project REF coincidente con el perfil autorizado. db:status remoto está deshabilitado.');
+    }
+    return { comando: 'up' as const, config: leerConfiguracionPostgres('migrador', env) };
+  }
+  return { comando: leerComando(args), config: leerConfiguracionPostgres('migrador', env) };
+}
+
 export function describirErrorPostgres(error: unknown): string {
   if (error instanceof ConnectionError) return 'No se pudo conectar a PostgreSQL. Revisá disponibilidad y credenciales del migrador.';
   const causa: unknown = error instanceof MigrationError ? error.cause : error;
@@ -39,8 +50,7 @@ async function main() {
   let comando: 'up' | 'status';
   let config: ReturnType<typeof leerConfiguracionPostgres>;
   try {
-    comando = leerComando(process.argv.slice(2));
-    config = leerConfiguracionPostgres('migrador');
+    ({ comando, config } = leerConfiguracionMigracion(process.argv.slice(2)));
   } catch (error) {
     console.error(error instanceof Error ? error.message : 'Configuración PostgreSQL inválida.');
     process.exitCode = 1;

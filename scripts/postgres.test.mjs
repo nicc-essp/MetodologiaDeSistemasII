@@ -4,7 +4,22 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { argumentos, generarCredenciales, limpiarTemporal, validarConfiguracion, validarEndpointDocker, validarRecursos } from './postgres.mjs';
+import { aislarEntornoPostgresLocal, argumentos, generarCredenciales, limpiarTemporal, validarConfiguracion, validarEndpointDocker, validarRecursos } from './postgres.mjs';
+
+test('las sesiones y suites descartables eliminan el destino remoto heredado y fuerzan local', () => {
+  const remoto = { PATH: 'sin-cambios', POSTGRES_TARGET: 'supabase-dev', POSTGRES_HOST: 'remoto',
+    SUPABASE_PROJECT_REF: 'ficticio', POSTGRES_CONNECTION_MODE: 'session', POSTGRES_SSL_CA_FILE: 'remota.crt',
+    DATABASE_URL: 'ficticia', PGHOST: 'remoto', PGSSLMODE: 'disable', COMPOSE_FILE: 'ajeno.yml' };
+  assert.deepEqual(aislarEntornoPostgresLocal(remoto), { PATH: 'sin-cambios', POSTGRES_TARGET: 'local' });
+  assert.equal(remoto.POSTGRES_TARGET, 'supabase-dev');
+});
+
+test('Compose conserva un backend local independiente del perfil Supabase del host', () => {
+  const compose = readFileSync(new URL('../docker-compose.yml', import.meta.url), 'utf8');
+  assert.match(compose, /POSTGRES_TARGET: local/);
+  assert.match(compose, /POSTGRES_HOST: postgres/);
+  assert.ok(!/SUPABASE_|POSTGRES_SSL_CA_FILE|POSTGRES_CONNECTION_MODE/.test(compose));
+});
 
 test('el verificador admite sockets locales y rechaza motores remotos o destinos ausentes', () => {
   validarEndpointDocker('unix:///var/run/docker.sock');
@@ -31,7 +46,7 @@ test('importación y argumentos inválidos no necesitan Docker ni crean credenci
   assert.equal(argumentos(['verificar', '--limpiar']).limpiar, true);
 });
 
-for (const args of [[], ['borrar'], ['preparar', '--limpiar'], ['verificar', '--pruebas'], ['verificar', '--limpiar', '--otro']]) {
+for (const args of [[], ['borrar'], ['preparar', '--limpiar'], ['verificar', '--pruebas'], ['verificar', '--limpiar', '--otro'], ['verificar', '--target', 'supabase-dev']]) {
   test(`argumentos cerrados: ${JSON.stringify(args)}`, () => assert.throws(() => argumentos(args)));
 }
 
@@ -144,7 +159,7 @@ test('la limpieza de archivos no acepta el workspace ni un directorio no pertene
 
 test('el verificador de migraciones rechaza destinos externos antes de consultar Docker', () => {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'path'));
-  for (const args of [['--url', 'postgres://destino-ficticio'], ['--limpiar', '--project-name', 'ajeno']]) {
+  for (const args of [['--url', 'postgres://destino-ficticio'], ['--limpiar', '--project-name', 'ajeno'], ['--target', 'supabase-dev']]) {
     const resultado = spawnSync(process.execPath, ['scripts/verificar-migraciones.mjs', ...args], { env, encoding: 'utf8' });
     assert.equal(resultado.status, 1);
     assert.equal(resultado.stdout, '');

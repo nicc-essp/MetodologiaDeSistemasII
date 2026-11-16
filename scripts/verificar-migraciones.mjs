@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { conPostgresDePruebas } from './postgres.mjs';
+import { aislarEntornoPostgresLocal, conPostgresDePruebas } from './postgres.mjs';
 
 try {
   const args = process.argv.slice(2);
@@ -11,7 +11,7 @@ try {
     await conPostgresDePruebas(async entorno => {
       const resultado = spawnSync(process.execPath, ['--import', 'tsx', '--test', archivo], {
         cwd: fileURLToPath(new URL('../backend/', import.meta.url)),
-        env: { ...process.env, POSTGRES_HOST: entorno.host, POSTGRES_PORT: String(entorno.port),
+        env: { ...aislarEntornoPostgresLocal(), POSTGRES_HOST: entorno.host, POSTGRES_PORT: String(entorno.port),
           POSTGRES_DB: entorno.database, POSTGRES_SECRETS_DIR: entorno.claves,
           DOCKER_LAWS_TEST_PROJECT: entorno.proyecto },
         encoding: 'utf8', timeout: 120000, maxBuffer: 16 * 1024 * 1024,

@@ -28,7 +28,7 @@ function conCredenciales(run: (env: NodeJS.ProcessEnv) => void) {
 test('configuración reutiliza archivos de P03 y fija un rol limitado por finalidad', () => {
   conCredenciales(env => {
     const aplicacion = leerConfiguracionPostgres('aplicacion', env);
-    assert.deepEqual(aplicacion, { host: '127.0.0.1', port: 5433, database: 'docker_laws_dev',
+    assert.deepEqual(aplicacion, { destino: 'local', ssl: false, host: '127.0.0.1', port: 5433, database: 'docker_laws_dev',
       username: 'docker_laws_app', password: 'a'.repeat(48) });
     const migrador = leerConfiguracionPostgres('migrador', { ...env, POSTGRES_DB: 'docker_laws_test', POSTGRES_PORT: '5544' });
     assert.equal(migrador.username, 'docker_laws_migrator');
@@ -63,7 +63,7 @@ test('configuración ausente o inválida falla sin revelar contenidos privados',
 });
 
 test('modelo y registro de migraciones se preparan sin conectar ni sincronizar negocio', async () => {
-  const conexion = crearConexionPostgres({ host: '127.0.0.1', port: 1, database: 'ficticia', username: 'docker_laws_app', password: 'ficticia' });
+  const conexion = crearConexionPostgres({ destino: 'local', ssl: false, host: '127.0.0.1', port: 1, database: 'ficticia', username: 'docker_laws_app', password: 'ficticia' });
   try {
     const Consulta = definirConsulta(conexion);
     assert.equal(Consulta.tableName, 'consultas');

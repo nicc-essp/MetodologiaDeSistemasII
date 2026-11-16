@@ -6,6 +6,10 @@ import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function comprobarDestinoDescartable() {
+  assert.equal(process.env.POSTGRES_TARGET, 'local');
+  for (const variable of ['SUPABASE_PROJECT_REF', 'POSTGRES_CONNECTION_MODE', 'POSTGRES_SSL_CA_FILE']) {
+    assert.equal(process.env[variable], undefined, 'Las pruebas descartables no admiten configuración Supabase.');
+  }
   assert.match(process.env.DOCKER_LAWS_TEST_PROJECT ?? '', /^docker-laws-p03-test-[a-f0-9]{32}$/, 'Ejecutar mediante pnpm test:postgres.');
   assert.equal(process.env.POSTGRES_HOST, '127.0.0.1');
   assert.equal(process.env.POSTGRES_DB, 'docker_laws_test');

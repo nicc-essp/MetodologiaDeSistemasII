@@ -364,3 +364,14 @@ La configuración y las migraciones deben permitir una conexión posterior con S
 De D06 solo se consideran ahora los privilegios técnicos y la exposición de datos del entorno controlado. La autorización funcional de clientes sigue pendiente. Persistencia no autoriza despliegue público ni uso con información personal real.
 
 Los pendientes se evaluarán mediante los criterios de [planificación.md](planificación.md). Homero conserva P01–P04 y P13; Martín mantiene P11/P12. Las asignaciones del equipo continúan siendo propuestas y cada tarea requiere evidencia para su cierre.
+
+### Continuación D03/D04 — Preparación local P04.4a (16/11/2026)
+
+El registro anterior conserva el estado al aprobar D01–D04. Posteriormente se aprobaron P04.1–P04.3: el arranque normal utiliza PostgreSQL local con Sequelize y migraciones Umzug explícitas. P04.4a incorpora únicamente preparación local para un futuro proyecto Supabase de desarrollo; no acredita conectividad ni permisos remotos y no completa P04.
+
+- Se conserva `app.consultas`, el modelo, la migración aprobada y `app."SequelizeMeta"`, sin nuevas dependencias ni cambios HTTP. Se selecciona `POSTGRES_TARGET=local|supabase-dev`; la ausencia de selector conserva solo los valores locales compatibles. Perfiles mezclados, incompletos o no reconocidos fallan sin fallback.
+- Se admiten conexión directa y session pooler/5432. Los roles SQL siguen siendo `docker_laws_app` y `docker_laws_migrator`; el usuario de transporte del pooler agrega la referencia del proyecto. No se habilita usuario administrador ni selección libre de credenciales.
+- TLS remoto exige CA PEM vigente, validación de cadena y nombre del servidor; no existe un modo remoto sin verificación. Las otras tres variables nuevas son modo de conexión, referencia del proyecto y ruta de CA. Se reutilizan host, puerto, base y directorio de secretos; el pool máximo de dos conexiones no cambia. Detalle en la [guía de persistencia](../backend/database/README.md).
+- Las futuras migraciones remotas requieren `up --supabase-project REF` coincidente con el perfil privado. `status` remoto se bloquea porque Umzug puede inicializar el historial. Express no migra al arrancar. Las pruebas y limpiezas Docker siguen siendo exclusivamente locales, con variables remotas eliminadas y comprobación del destino antes del DDL.
+
+**Pendiente para P04.4b:** autorizar proyecto nuevo y referencia concreta; comprobar IPv6/directo o IPv4/session, certificado aplicable, roles/permisos administrados y esquema `app` fuera de Data API; aprobar el procedimiento remoto de preparación antes de escribir. El inicializador local no se ejecutará en Supabase. Conexión, migración, historial, permisos, API y persistencia deberán verificarse realmente con datos ficticios, sin limpiezas remotas. El DER futuro continúa siendo una hipótesis conceptual no aprobada y no se autoriza uso público ni datos personales reales.

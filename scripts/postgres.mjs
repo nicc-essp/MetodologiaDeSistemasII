@@ -10,6 +10,11 @@ const raiz = fileURLToPath(new URL('../', import.meta.url));
 const archivosClave = ['admin.txt', 'app.txt', 'migrator.txt'];
 const valoresPrivados = new Set();
 
+export function aislarEntornoPostgresLocal(env = process.env) {
+  const limpio = Object.fromEntries(Object.entries(env).filter(([k]) => !/^(COMPOSE_|POSTGRES_|DATABASE_|SUPABASE_|PG)/i.test(k)));
+  return { ...limpio, POSTGRES_TARGET: 'local' };
+}
+
 export function argumentos(args) {
   assert.ok(['preparar', 'verificar'].includes(args[0]), 'Uso: preparar [--pruebas] | verificar [--limpiar]');
   const opcion = args[0] === 'preparar' ? '--pruebas' : '--limpiar';
@@ -135,7 +140,7 @@ function prepararSesion(tipo, temporal, identificador) {
   const claves = generarCredenciales(join(temporal, tipo));
   const envFile = join(temporal, `${tipo}.env`);
   writeFileSync(envFile, '', { flag: 'wx', mode: 0o600 });
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(COMPOSE_|POSTGRES_|DATABASE_)/i.test(k)));
+  const env = aislarEntornoPostgresLocal();
   Object.assign(env, { POSTGRES_DB: 'docker_laws_dev', POSTGRES_PORT: '0', POSTGRES_TEST_PORT: '0', POSTGRES_SECRETS_DIR: claves, POSTGRES_TEST_SECRETS_DIR: claves });
   return { proyecto, nuevo: true, claves, envFile, env, tipo, base: tipo === 'dev' ? 'docker_laws_dev' : 'docker_laws_test',
     composeFile: join(raiz, tipo === 'dev' ? 'docker-compose.yml' : 'docker-compose.test.yml'),

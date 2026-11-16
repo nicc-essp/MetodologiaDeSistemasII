@@ -1,6 +1,6 @@
-# Persistencia local de consultas — P04.2 y P04.3
+# Persistencia de consultas — P04.2, P04.3 y preparación P04.4a
 
-P04.2 incorpora Sequelize y migraciones; P04.3 conecta la API HTTP con PostgreSQL local durante el arranque normal. **La memoria se conserva para pruebas aisladas, sin fallback en ejecución normal.** Las migraciones siguen siendo explícitas. No se incorporan Supabase ni entidades futuras y P04 permanece pendiente de su cierre y validación remota.
+P04.2 incorpora Sequelize y migraciones; P04.3 conecta la API HTTP con PostgreSQL local durante el arranque normal. **La memoria se conserva para pruebas aisladas, sin fallback en ejecución normal.** Las migraciones siguen siendo explícitas. P04.4a prepara perfiles y TLS para una validación posterior con Supabase, sin realizar conexiones remotas. No se agregan entidades futuras y P04 permanece pendiente de su cierre y validación remota.
 
 ## Compatibilidad comprobada
 
@@ -36,7 +36,7 @@ Los comandos `start` y `db:*` cargan el `.env` opcional de la raíz con Node, si
 
 `leerConfiguracionPostgres('aplicacion')` selecciona exclusivamente `docker_laws_app`/`app.txt`; el runner utiliza `docker_laws_migrator`/`migrator.txt`. No hay selección del usuario administrador ni fallback ante claves ausentes. `crearConexionPostgres` prepara una instancia sin conectar: `authenticate`, consultas y cierre son explícitos.
 
-El esquema `app` debe existir y pertenecer al migrador: lo prepara P03 sobre volúmenes nuevos. Si no existe o fallan permisos, corregir la configuración con revisión; **no eliminar ni reinicializar un volumen de desarrollo**. La conectividad y TLS para Supabase quedan fuera de este incremento.
+El esquema `app` debe existir y pertenecer al migrador: lo prepara P03 sobre volúmenes nuevos. Si no existe o fallan permisos, corregir la configuración con revisión; **no eliminar ni reinicializar un volumen de desarrollo**. La validación real de conectividad y TLS con Supabase sigue pendiente de P04.4b.
 
 ## Arranque, API y cierre — P04.3
 
@@ -87,3 +87,81 @@ Evidencia técnica de P04.3 — 16 de noviembre de 2026, pendiente de revisión 
 - Se retiraron solo los recursos nuevos acreditados; permanecen los mismos 53 volúmenes y 3 redes preexistentes, sin contenedores adicionales. No se migró ni limpió el volumen habitual de desarrollo.
 
 La aplicación sigue sin autenticación/autorización funcional y debe utilizar solo datos ficticios en un entorno controlado. `/health` conserva su contrato de estado del proceso; no es una comprobación continua de disponibilidad de la base. Esta evidencia no cierra P04 ni acredita la conexión con Supabase.
+
+## P04.4a — Perfiles locales preparados, sin conexión a Supabase
+
+La selección es explícita mediante `POSTGRES_TARGET=local|supabase-dev`. Su ausencia conserva únicamente el destino local por compatibilidad con P03; nunca se infiere Supabase a partir del host. Un valor desconocido, parámetros remotos en un perfil local o un perfil remoto incompleto impiden crear la conexión. No hay fallback a otra base ni a memoria.
+
+Compose sigue siendo exclusivamente local: fija `POSTGRES_TARGET=local`, `POSTGRES_HOST=postgres` y no recibe parámetros TLS ni credenciales Supabase. El `.env` habitual debe conservarse local. Un perfil remoto se prepara por separado bajo `secrets/`, excluido de Git y de las imágenes.
+
+### Variables definitivas
+
+| Variable | Local | `supabase-dev` |
+| --- | --- | --- |
+| `POSTGRES_TARGET` (nueva) | `local`; predeterminado compatible | Obligatoria: `supabase-dev`. Evita inferir destinos. |
+| `POSTGRES_HOST` | `127.0.0.1` predeterminado; admite `localhost`, `::1` y el servicio Docker `postgres` | Obligatoria. Directo: `db.<REF>.supabase.co`. Session: host exacto de Connect con formato `aws-<número>-<región>.pooler.supabase.com`. No admite IP, URL ni sufijos ajenos. |
+| `POSTGRES_PORT` | `5433` desde host; `5432` dentro de Compose | Obligatoria: `5432`. No admite transaction pooler/6543. |
+| `POSTGRES_DB` | `docker_laws_dev` predeterminado | Obligatoria: `postgres`. La referencia del proyecto no es el nombre de la base. |
+| `POSTGRES_SECRETS_DIR` | `./secrets/postgres` predeterminado | Directorio privado independiente, obligatorio; se recomienda `./secrets/supabase-dev/<REF>`. Se rechazan las rutas estándar locales. |
+| `POSTGRES_CONNECTION_MODE` (nueva) | No debe estar definida, ni vacía | Obligatoria: `direct` o `session`; determina host y usuario de transporte. |
+| `SUPABASE_PROJECT_REF` (nueva) | No debe estar definida | Referencia de veinte caracteres alfanuméricos en minúscula; vincula host directo, usuario agrupado y confirmación del migrador. No es una credencial. |
+| `POSTGRES_SSL_CA_FILE` (nueva) | No debe estar definida | Ruta obligatoria a la CA PEM correspondiente al endpoint elegido. No se descarga automáticamente. |
+
+Las rutas relativas se resuelven desde la raíz del repositorio. No se incorporan variables de contraseña, usuario libre, URL, tamaño de pool ni un selector para reducir TLS. Se rechazan `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_SSL_MODE` y las variables alternativas `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGSSLMODE`, `PGSSLROOTCERT`, `PGSSLCERT`, `PGSSLKEY`, `PGSERVICE` y `PGSERVICEFILE`. Sus valores no se incluyen en los errores.
+
+**Roles y secretos:** la aplicación lee solo `app.txt` y el runner solo `migrator.txt`. Se conserva el formato de P03: exactamente 48 caracteres hexadecimales en minúscula, sin salto de línea. En la preparación remota deberán generarse claves independientes para esos roles; no se utiliza la contraseña del administrador. En modo directo se envía `docker_laws_app` o `docker_laws_migrator`; en session pooler se agrega `.<REF>`. El rol SQL esperado sigue siendo el nombre sin sufijo. No se cambió la comprobación de permisos del almacén.
+
+### TLS y límites de conexión
+
+Sequelize recibe `dialectOptions.ssl` con la CA leída, `rejectUnauthorized: true` y `servername` igual al host validado. La CA debe contener certificados PEM de autoridad vigentes. Node/pg verifican la cadena y el nombre del servidor; no se reemplaza `checkServerIdentity`. `NODE_TLS_REJECT_UNAUTHORIZED=0` se rechaza en el perfil remoto. Una CA ausente, inválida o incompatible debe corregirse: nunca se recurre a `rejectUnauthorized: false`. En local se fija `ssl: false`, sin heredar opciones ambientales.
+
+Se mantiene el pool existente de **máximo dos conexiones por proceso**, sin mínimo precalentado ni ajuste nuevo. El migrador tiene su propia instancia y la cierra al terminar. Dos procesos de aplicación podrían consumir cuatro conexiones; revisar capacidad antes de multiplicarlos. Solo debe ejecutarse un migrador a la vez.
+
+### Preparación futura de Supabase — requiere revisión y autorización para P04.4b
+
+Estos pasos están documentados, **no ejecutados**:
+
+1. Crear y autorizar un proyecto nuevo, aislado y exclusivamente de desarrollo. Registrar su referencia, región y responsable; usar únicamente datos sintéticos. No utilizar un proyecto compartido existente ni publicar la aplicación.
+2. Revisar Connect: preferir conexión directa si existe conectividad IPv6; utilizar session pooler/5432 cuando se necesite IPv4. Confirmar el host y certificado aplicables al modo elegido. La CA del endpoint debe validar su nombre; no asumir que todos los endpoints presentan la misma cadena. Un endpoint distinto del formato soportado requiere revisión, sin flexibilizar silenciosamente la validación.
+3. Preparar y revisar un procedimiento remoto específico de roles y permisos: esquema `app` propiedad de `docker_laws_migrator`, `USAGE` para aplicación; migrador con DDL/historial y capacidad de otorgar los permisos previstos; aplicación con `SELECT`/`INSERT` y uso de secuencia tras migrar, sin DDL ni acceso al historial. **No ejecutar `docker/postgres/inicializar.sh` en Supabase**: sus operaciones globales pertenecen al PostgreSQL local. Los privilegios administrados y cualquier concesión necesaria deberán comprobarse y aprobarse antes de escribir.
+4. Mantener `app` fuera de los esquemas expuestos por la Data API y revisar sus permisos predeterminados. Si no se utiliza la Data API, evaluar desactivarla. No conceder acceso a `anon`, `authenticated` o `service_role` para facilitar pruebas. RLS no sustituye las futuras decisiones de autorización de Express.
+5. Guardar CA y claves fuera de Git, con acceso restringido del usuario. Preparar el siguiente perfil **en un archivo privado** `secrets/supabase-dev/<REF>/conexion.env`, sustituyendo `<REF>` y las rutas, sin contraseñas ni URLs:
+
+   ```dotenv
+   POSTGRES_TARGET=supabase-dev
+   POSTGRES_CONNECTION_MODE=direct
+   SUPABASE_PROJECT_REF=<REF>
+   POSTGRES_HOST=db.<REF>.supabase.co
+   POSTGRES_PORT=5432
+   POSTGRES_DB=postgres
+   POSTGRES_SECRETS_DIR=./secrets/supabase-dev/<REF>
+   POSTGRES_SSL_CA_FILE=./secrets/supabase-dev/<REF>/ca.crt
+   ```
+
+   Para session, cambiar únicamente modo y host por el indicado en Connect; el código deriva el usuario. No copiar este perfil sobre `.env` local ni emplear los fixtures TLS públicos de las pruebas.
+
+6. Tras autorizar P04.4b, verificar primero conexión TLS autenticada y permisos sin utilizar el runner de historial. **`db:status` no es una comprobación remota de solo lectura**: Umzug puede crear `app."SequelizeMeta"`; el runner lo bloquea para Supabase. Revisar SQL de preparación y migración antes de ejecutarlo. La futura invocación explícita, desde `backend`, será:
+
+   ```powershell
+   node --env-file=../secrets/supabase-dev/<REF>/conexion.env --import tsx database/migrate.ts up --supabase-project <REF>
+   ```
+
+   El argumento no es un secreto: debe coincidir con el perfil. Sin confirmación, con referencia diferente o con `status`, el proceso falla antes de leer claves o abrir conexión. Esta barrera prueba la selección deliberada, no certifica por sí sola que el proyecto haya sido autorizado por el equipo. No hay migración automática al iniciar Express ni rollback remoto.
+
+7. Validar luego historial, segunda ejecución sin duplicación, estructura y permisos de `app.consultas`, API de creación/listado/búsqueda y conservación tras reiniciar el backend, siempre con datos ficticios. El arranque remoto de comprobación deberá limitar HTTP a loopback. La suite local `test:postgres` **no debe reutilizarse contra Supabase**, porque incluye DDL y ensayos de permisos. No ejecutar limpiezas ni pruebas negativas destructivas remotas.
+
+### Aislamiento y evidencia local
+
+Los helpers Docker descartan variables `COMPOSE_*`, `POSTGRES_*`, `DATABASE_*`, `SUPABASE_*` y `PG*` heredadas y fuerzan `POSTGRES_TARGET=local`; el runner vuelve a hacerlo para el proceso de pruebas. Antes de cualquier DDL, el helper exige además ausencia de parámetros remotos, host loopback, base de pruebas, UUID y carpeta temporal propios. No se ampliaron las opciones de limpieza: solo recursos Docker nuevos con nombres y etiquetas acreditados, sin destinos externos. Estas protecciones no constituyen un mecanismo para limpiar Supabase.
+
+Evidencia ejecutada el **16/11/2026**:
+
+- `pnpm --dir backend test`: **288 pruebas aprobadas**, incluidas 17 nuevas de configuración, roles, barreras de migración/DDL y TLS. El handshake TLS real se ejecutó únicamente en `127.0.0.1`, con CA/certificado/clave públicos y sintéticos identificados en `tests/fixtures/tls-local/README.md`: aceptación de CA/nombre correctos y rechazo de CA ajena o nombre incorrecto. No se simuló una autenticación PostgreSQL exitosa.
+- `pnpm --dir backend typecheck`: aprobado, conservando el perfil estricto y la prueba negativa temporal existente. No se agregaron dependencias ni se modificaron lockfiles.
+- `node --test scripts/postgres.test.mjs`: **33 pruebas aprobadas**, incluidas la neutralización del perfil remoto heredado, configuración Compose local y rechazo de opciones de destino externo, además de las barreras de limpieza existentes.
+- `docker compose --env-file .env.example config --quiet` y su variante `-f docker-compose.test.yml`: aprobadas. El motor Docker estaba detenido (pipe del daemon no disponible); no se repitieron integración PostgreSQL real, builds ni arranque de contenedores en esta revisión. No se ejecutaron limpiezas ni se modificaron recursos Docker.
+- Exclusión de `.env`, perfiles, claves y CA bajo `secrets/` y de los documentos privados SDD comprobada mediante `git check-ignore`. Revisión de cambios y `git diff --check` correctos, sin tocar staging ni ramas.
+
+Ninguna prueba sintética o handshake en loopback acredita una conexión con Supabase. P04.4b y el cierre de P04 permanecen pendientes. Antes de cerrar la revisión de P04.4a, se recomienda repetir `pnpm --dir backend test:postgres` cuando Docker esté disponible; crea instancias descartables y, sin `--limpiar`, conserva sus recursos detenidos para inspección. Toda limpieza posterior debe respetar las autorizaciones y comprobaciones de propiedad de P03.
+
+Fuentes oficiales consultadas: [modos de conexión Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres), [verificación TLS](https://supabase.com/docs/guides/platform/ssl-enforcement), [configuración SSL de pg y advertencia sobre URLs](https://node-postgres.com/features/ssl) y [seguridad de la Data API](https://supabase.com/docs/guides/api/securing-your-api).
