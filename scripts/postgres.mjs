@@ -187,11 +187,54 @@ export function limpiarTemporal(temporal) {
   rmSync(absoluto, { recursive: true, force: false });
 }
 
-export function verificar({ limpiar = false } = {}) {
+function comprobarDockerLocal() {
   if (process.env.DOCKER_HOST) validarEndpointDocker(process.env.DOCKER_HOST);
   validarEndpointDocker(docker(['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}']).stdout.trim());
   docker(['version', '--format', '{{.Server.Version}}']);
   assert.equal(docker(['info', '--format', '{{.OSType}}']).stdout.trim(), 'linux', 'Se necesita un motor de contenedores Linux.');
+}
+
+function finalizarSesiones(sesiones, temporal, limpiar) {
+  // Solo se elimina con --limpiar explícito, después de inspeccionar propiedad y nombres.
+  for (const sesion of [...sesiones].reverse()) {
+    validarRecursos(sesion, recursos(sesion));
+    if (limpiar) {
+      validarConfiguracion(JSON.parse(compose(sesion, ['config', '--format', 'json']).stdout), sesion);
+      compose(sesion, ['down', '--volumes']);
+      assert.ok(['container', 'volume', 'network'].every(t => ids(t, sesion.proyecto).length === 0), 'Quedaron recursos de la ejecución.');
+    } else {
+      compose(sesion, ['stop', 'postgres']);
+      console.log(`Recursos conservados y detenidos: ${sesion.proyecto}`);
+    }
+  }
+  if (limpiar) limpiarTemporal(temporal);
+  else console.log(`Credenciales sintéticas de la ejecución: ${temporal}`);
+}
+
+// Reutiliza el aislamiento y las protecciones de P03 para pruebas del backend.
+export async function conPostgresDePruebas(run, { limpiar = false } = {}) {
+  comprobarDockerLocal();
+  const temporal = mkdtempSync(join(realpathSync(tmpdir()), 'docker-laws-postgres-'));
+  const sesiones = [];
+  try {
+    const sesion = prepararSesion('test', temporal, randomUUID().replaceAll('-', ''));
+    sesiones.push(sesion);
+    validarConfiguracion(JSON.parse(compose(sesion, ['config', '--format', 'json']).stdout), sesion);
+    console.log(`PostgreSQL descartable: ${sesion.proyecto}`);
+    compose(sesion, ['up', '-d', '--wait', '--wait-timeout', '120', 'postgres']);
+    validarRecursos(sesion, recursos(sesion));
+    comprobarRoles(sesion);
+    const puerto = compose(sesion, ['port', 'postgres', '5432']).stdout.trim();
+    assert.match(puerto, /^127\.0\.0\.1:\d+$/, 'Puerto de pruebas fuera del host local.');
+    return await run({ proyecto: sesion.proyecto, host: '127.0.0.1', port: Number(puerto.split(':')[1]),
+      database: sesion.base, claves: sesion.claves, ocultar });
+  } finally {
+    finalizarSesiones(sesiones, temporal, limpiar);
+  }
+}
+
+export function verificar({ limpiar = false } = {}) {
+  comprobarDockerLocal();
   const temporal = mkdtempSync(join(realpathSync(tmpdir()), 'docker-laws-postgres-'));
   const identificador = randomUUID().replaceAll('-', '');
   const sesiones = [];
@@ -222,20 +265,7 @@ export function verificar({ limpiar = false } = {}) {
     verificado = true;
     console.log('P03: PostgreSQL 17.12, conexión autenticada, permisos, volumen tras reinicio e independencia verificados.');
   } finally {
-    // Solo se elimina con --limpiar explícito, después de inspeccionar propiedad y nombres.
-    for (const sesion of [...sesiones].reverse()) {
-      validarRecursos(sesion, recursos(sesion));
-      if (limpiar) {
-        validarConfiguracion(JSON.parse(compose(sesion, ['config', '--format', 'json']).stdout), sesion);
-        compose(sesion, ['down', '--volumes']);
-        assert.ok(['container', 'volume', 'network'].every(t => ids(t, sesion.proyecto).length === 0), 'Quedaron recursos de la ejecución.');
-      } else {
-        compose(sesion, ['stop', 'postgres']);
-        console.log(`Recursos conservados y detenidos: ${sesion.proyecto}`);
-      }
-    }
-    if (limpiar) limpiarTemporal(temporal);
-    else console.log(`Credenciales sintéticas de la ejecución: ${temporal}`);
+    finalizarSesiones(sesiones, temporal, limpiar);
   }
   return { verificado, proyectos: sesiones.map(s => s.proyecto), limpiados: limpiar };
 }

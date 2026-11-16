@@ -53,7 +53,7 @@ export function prepararContexto(componente, raizFuentes = raiz) {
   mkdirSync(contexto);
   const comunes = ['package.json', 'pnpm-lock.yaml', 'Dockerfile', '.dockerignore'];
   const publicos = componente === 'backend'
-    ? [...comunes, 'pnpm-workspace.yaml', 'tsconfig.json', 'index.ts', 'app.ts', 'models', 'data', 'routes', 'controllers', 'validations', 'middleware', 'config', 'tests']
+    ? [...comunes, 'pnpm-workspace.yaml', 'tsconfig.json', 'index.ts', 'app.ts', 'models', 'data', 'database', 'migrations', 'routes', 'controllers', 'validations', 'middleware', 'config', 'tests']
     : [...comunes, 'index.html', 'vite.config.js', 'eslint.config.js', 'src', 'public'];
   const requeridos = componente === 'backend'
     ? ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'index.ts']

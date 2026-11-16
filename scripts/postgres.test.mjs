@@ -141,3 +141,13 @@ test('la limpieza de archivos no acepta el workspace ni un directorio no pertene
   assert.throws(() => limpiarTemporal(process.cwd()));
   assert.throws(() => limpiarTemporal(join(realpathSync(tmpdir()), 'otra-tarea')));
 });
+
+test('el verificador de migraciones rechaza destinos externos antes de consultar Docker', () => {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'path'));
+  for (const args of [['--url', 'postgres://destino-ficticio'], ['--limpiar', '--project-name', 'ajeno']]) {
+    const resultado = spawnSync(process.execPath, ['scripts/verificar-migraciones.mjs', ...args], { env, encoding: 'utf8' });
+    assert.equal(resultado.status, 1);
+    assert.equal(resultado.stdout, '');
+    assert.match(resultado.stderr, /No se admiten destinos externos/);
+  }
+});

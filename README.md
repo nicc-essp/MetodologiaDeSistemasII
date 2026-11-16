@@ -121,7 +121,7 @@ docker compose down
 
 ## PostgreSQL local para desarrollo y pruebas (P03)
 
-El entorno PostgreSQL está preparado por separado del almacenamiento de formularios: **la API todavía usa memoria**. No se instalaron Sequelize ni Umzug y no se crean tablas de negocio. P03 permanece pendiente de revisión del usuario.
+El entorno PostgreSQL está preparado por separado del almacenamiento de formularios: **la API todavía usa memoria**. P03 está completada y aprobada. P04.2 incorpora el modelo y las migraciones explícitas, sin conectarlos todavía a los controladores HTTP; ver [conexión y migraciones](backend/database/README.md).
 
 Se utiliza `postgres:17.12-bookworm`, fijado por [digest del índice oficial de imágenes](https://github.com/docker-library/repo-info/blob/master/repos/postgres/remote/17.12-bookworm.md). El servicio de desarrollo tiene un volumen nombrado `postgres_dev_data`, gestionado por Compose. Frontend, backend y PostgreSQL publican puertos únicamente en `127.0.0.1`.
 
@@ -135,7 +135,7 @@ docker compose --profile persistencia ps postgres
 
 Las tres claves quedan en `secrets/postgres/`, excluido de Git. Se montan como secretos de Compose, sin contraseñas en el YAML ni en variables `VITE_*`. El preparador nunca sobrescribe claves existentes y rechaza configuraciones incompletas. `.env.example` contiene solo parámetros públicos y rutas; no es necesario copiarlo para usar los valores predeterminados. PostgreSQL escucha en `localhost:5433`.
 
-El administrador `postgres` solo prepara la instancia. `docker_laws_migrator` es dueño del esquema vacío `app` y puede crear objetos allí; `docker_laws_app` solo tiene conexión y uso del esquema. P04 deberá conceder lectura/inserción sobre la futura tabla y los permisos necesarios de su secuencia. No se conceden privilegios globales sobre tablas futuras ni sobre el historial de migraciones. Ningún rol de aplicación o migración es superusuario ni puede crear bases o roles.
+El administrador `postgres` solo prepara la instancia. `docker_laws_migrator` es dueño del esquema `app` y puede crear objetos allí; inicialmente `docker_laws_app` solo tiene conexión y uso del esquema. La migración `001-crear-consultas` concede lectura/inserción sobre `app.consultas` y uso de su secuencia. No se conceden privilegios globales sobre tablas futuras ni acceso de aplicación al historial de migraciones. Ningún rol de aplicación o migración es superusuario ni puede crear bases o roles.
 
 Comprobar una conexión TCP autenticada con el rol de aplicación:
 
@@ -157,7 +157,7 @@ node scripts/postgres.mjs verificar --limpiar
 
 `--limpiar` autoriza retirar únicamente recursos nuevos de esa ejecución, después de comprobar nombres y etiquetas. Se rechazan proyectos/volúmenes preexistentes, secretos ajenos, puertos públicos y motores Docker remotos TCP/SSH. No se ejecutan limpiezas globales, `prune` ni borrados sobre una URL de base proporcionada externamente. Sin `--limpiar`, la verificación conserva sus recursos detenidos e informa sus nombres y el directorio temporal de claves. Si no puede acreditar propiedad o completar la limpieza, falla y deja los recursos para revisión.
 
-El arranque habitual `docker compose up --build` conserva frontend/backend sin exigir PostgreSQL, que pertenece al perfil optativo `persistencia`. Supabase, Sequelize, migraciones y el modelo `app.consultas` corresponden a etapas posteriores. Continuar usando solo datos ficticios en este entorno sin autenticación de usuarios.
+El arranque habitual `docker compose up --build` conserva frontend/backend sin exigir PostgreSQL, que pertenece al perfil optativo `persistencia`. Las migraciones de P04.2 se ejecutan por separado y nunca al iniciar Express. La integración HTTP con PostgreSQL y la validación en Supabase siguen pendientes. Continuar usando solo datos ficticios en este entorno sin autenticación de usuarios.
 
 ## Ejecución sin Docker
 
