@@ -1,0 +1,2 @@
+# El inicializador se ejecuta en Linux, incluso desde un checkout Windows.
+docker/postgres/*.sh text eol=lf

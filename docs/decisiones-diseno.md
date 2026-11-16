@@ -286,3 +286,92 @@ Los Dockerfiles y el entorno de desarrollo se conservan. Ambos `.dockerignore` e
 Se verificaron contextos e imágenes reales de ambos componentes y un proyecto Compose de prueba propio con defaults y destino/origen 127.0.0.1. HTTP, configuración pública de Vite y reinicio real del backend conservaron el comportamiento esperado; se retiraron los recursos propios. La prueba de cabeceras no sustituye la comprobación de CORS efectivo en un navegador real. El usuario confirmó posteriormente el protocolo del prototipo con Chrome y Narrador en localhost y 127.0.0.1, incluida esa comprobación. Esta evidencia humana complementa las verificaciones automatizadas existentes; no se repitieron durante esta actualización ni acreditan funcionalidades futuras.
 
 El costo de esta verificación es necesitar Docker/Buildx/tar y tiempo de construcción/inspección. Su cobertura se limita a categorías y formatos ensayados. No se incorporan base de datos, autenticación, proxy, TLS ni despliegue productivo; el prototipo continúa destinado a demostración con datos ficticios.
+
+## 7. Decisiones aprobadas para el primer incremento de persistencia
+
+**Fecha:** 15 de noviembre de 2026. **Fuente:** aprobación expresa de Homero en la revisión supervisada de D01–D04.
+
+Este apartado registra acuerdos para una implementación futura. Los apartados 1–6 conservan los antecedentes y el estado del prototipo refactorizado; el código todavía utiliza memoria. No se instalaron dependencias, ejecutaron migraciones ni verificaron conexiones PostgreSQL/Supabase en esta actualización. Registrar decisiones no completa P01–P04 ni autoriza comenzar su ejecución.
+
+### D01 — Alcance aprobado
+
+El primer incremento persistirá localmente las consultas existentes, conservando frontend, backend y endpoints. Comprende PostgreSQL con Docker, adaptación asíncrona, migraciones y pruebas. Quedan fuera cuentas, clientes registrados, representantes, casos, mensajes y Caddy.
+
+P04 tiene dos hitos: persistencia local y posterior validación real contra PostgreSQL de Supabase. El hito remoto permanece pendiente hasta ejecutarse; el éxito local no acredita Supabase ni completa toda P04. No se requiere resolver funcionalidades futuras para trabajar en el hito local.
+
+### D02 — Modelo y comportamiento aprobados
+
+Se utilizará `app.consultas`, sin relaciones con entidades futuras:
+
+| Campo | Definición aprobada para el modelo mínimo |
+| --- | --- |
+| `id` | `INTEGER`, clave primaria generada por PostgreSQL; no ingresado por el cliente. No se exige una secuencia sin huecos. |
+| `nombre`, `apellido`, `dni`, `telefono`, `email`, `asunto`, `mensaje` | `TEXT NOT NULL` en cada columna, sin límites individuales ni unicidad nueva de DNI/correo. |
+
+Cada fila conserva el contacto declarado al enviar la consulta como información histórica. Una consulta inicial no constituye un caso jurídico. Bajo esta semántica, la dependencia funcional relevante es `id → los siete campos`: valores del dominio por columna (1FN), dependencia de la clave simple completa (2FN) y ausencia de dependencias transitivas declaradas entre atributos no clave (3FN). No se supone que DNI o correo determinen el contacto vigente de una persona.
+
+DER mínimo aprobado para este incremento:
+
+```mermaid
+erDiagram
+    CONSULTA {
+        int id PK
+        text nombre
+        text apellido
+        text dni
+        text telefono
+        text email
+        text asunto
+        text mensaje
+    }
+```
+
+La base persistente comienza vacía. Los registros ficticios solo se utilizan en pruebas o demostraciones explícitas, sin inserción automática en cada arranque.
+
+Se aprueba rechazar con HTTP 400 los textos con NUL o Unicode mal formado antes de insertar, sin modificar silenciosamente su contenido. Deben agregarse regresiones y conservar los demás comportamientos válidos: campos, rutas, estados y mensajes existentes, valores sin recortes, límite del cuerpo y validaciones actuales de DNI, teléfono y correo.
+
+El DER de seis entidades en [discusion-tecnica.md](discusion-tecnica.md) se conserva como **propuesta conceptual futura no aprobada**. Sus cardinalidades, perfiles, claves y reglas de acceso no se trasladan al esquema inicial.
+
+### D03 — Selección provisional y condiciones pendientes
+
+Se aprueban provisionalmente Sequelize 6, controlador `pg` y migraciones versionadas con Umzug, con organización mínima de conexión, modelo y acceso a datos. No se agregan capas de delegación ni patrones sin una necesidad concreta.
+
+Antes de instalar deben verificarse y registrarse:
+
+- Compatibilidad real con Node.js, TypeScript, ESM y pnpm del proyecto, versiones exactas y forma de cargar las migraciones. Distinguir soporte declarado de comprobaciones efectivamente ejecutadas.
+- Necesidad de `pg-hstore` para la versión y los tipos utilizados: no se presume ni su inclusión ni su ausencia.
+- Esquema del historial de Umzug y privilegios, incluida la preparación del esquema antes de inicializar el historial.
+
+**Propuesta técnica pendiente de validación:** tabla de historial `app."SequelizeMeta"`, separada de las entidades de negocio.
+
+| Rol técnico propuesto | Privilegios a validar |
+| --- | --- |
+| Migrador | Preparar y usar el esquema `app` (`CREATE`/`USAGE`), aplicar DDL sobre los objetos del incremento y mantener el historial con `SELECT`/`INSERT`/`DELETE` y permisos de creación. |
+| Aplicación | `USAGE` del esquema, `SELECT`/`INSERT` sobre `app.consultas` y permisos necesarios sobre su secuencia; sin DDL ni permisos sobre el historial. |
+
+La aprobación provisional no acredita estas verificaciones ni habilita instalaciones ahora. Las pruebas de compilación, carga de migraciones y acceso real deberán aportar evidencia cuando se autorice su ejecución. Se prohíben `sync({ force: true })` y `sync({ alter: true })` como sustitutos de migraciones.
+
+La memoria se conserva para pruebas aisladas; no es un fallback ante fallos PostgreSQL. Los errores de conexión o persistencia deben tratarse explícitamente y sin revelar credenciales.
+
+### D04 — Entornos aprobados y validaciones pendientes
+
+Se aprueba PostgreSQL local mediante Docker, con desarrollo y pruebas separados. La infraestructura debe ser reproducible, sencilla y sin scripts innecesarios. No se utilizarán datos personales reales ni credenciales compartidas para pruebas.
+
+Quedan pendientes verificar la imagen y versión concreta, volúmenes, configuración, credenciales propias, permisos, conexión, inicialización y limpieza protegida de recursos descartables. Una configuración ausente o un destino no autorizado deben impedir pruebas destructivas; nunca se limpiarán bases existentes, compartidas o reales para acelerar el desarrollo.
+
+La configuración y las migraciones deben permitir una conexión posterior con Supabase. Proyecto, conectividad, modo directo o agrupado y TLS se resolverán y comprobarán en ese hito; no se presupone que cambiar una URL demuestre compatibilidad.
+
+De D06 solo se consideran ahora los privilegios técnicos y la exposición de datos del entorno controlado. La autorización funcional de clientes sigue pendiente. Persistencia no autoriza despliegue público ni uso con información personal real.
+
+Los pendientes se evaluarán mediante los criterios de [planificación.md](planificación.md). Homero conserva P01–P04 y P13; Martín mantiene P11/P12. Las asignaciones del equipo continúan siendo propuestas y cada tarea requiere evidencia para su cierre.
+
+### Continuación D03/D04 — Preparación local P04.4a (16/11/2026)
+
+El registro anterior conserva el estado al aprobar D01–D04. Posteriormente se aprobaron P04.1–P04.3: el arranque normal utiliza PostgreSQL local con Sequelize y migraciones Umzug explícitas. P04.4a incorpora únicamente preparación local para un futuro proyecto Supabase de desarrollo; no acredita conectividad ni permisos remotos y no completa P04.
+
+- Se conserva `app.consultas`, el modelo, la migración aprobada y `app."SequelizeMeta"`, sin nuevas dependencias ni cambios HTTP. Se selecciona `POSTGRES_TARGET=local|supabase-dev`; la ausencia de selector conserva solo los valores locales compatibles. Perfiles mezclados, incompletos o no reconocidos fallan sin fallback.
+- Se admiten conexión directa y session pooler/5432. Los roles SQL siguen siendo `docker_laws_app` y `docker_laws_migrator`; el usuario de transporte del pooler agrega la referencia del proyecto. No se habilita usuario administrador ni selección libre de credenciales.
+- TLS remoto exige CA PEM vigente, validación de cadena y nombre del servidor; no existe un modo remoto sin verificación. Las otras tres variables nuevas son modo de conexión, referencia del proyecto y ruta de CA. Se reutilizan host, puerto, base y directorio de secretos; el pool máximo de dos conexiones no cambia. Detalle en la [guía de persistencia](../backend/database/README.md).
+- Las futuras migraciones remotas requieren `up --supabase-project REF` coincidente con el perfil privado. `status` remoto se bloquea porque Umzug puede inicializar el historial. Express no migra al arrancar. Las pruebas y limpiezas Docker siguen siendo exclusivamente locales, con variables remotas eliminadas y comprobación del destino antes del DDL.
+
+**Pendiente para P04.4b:** autorizar proyecto nuevo y referencia concreta; comprobar IPv6/directo o IPv4/session, certificado aplicable, roles/permisos administrados y esquema `app` fuera de Data API; aprobar el procedimiento remoto de preparación antes de escribir. El inicializador local no se ejecutará en Supabase. Conexión, migración, historial, permisos, API y persistencia deberán verificarse realmente con datos ficticios, sin limpiezas remotas. El DER futuro continúa siendo una hipótesis conceptual no aprobada y no se autoriza uso público ni datos personales reales.
