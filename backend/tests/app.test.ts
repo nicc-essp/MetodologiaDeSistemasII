@@ -6,6 +6,7 @@ import { crearAlmacenFormularios } from '../data/formularios-guardados';
 import { consultaFicticia } from './helpers/fixtures';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { iniciarServidor } from '../index';
 
 test('el helper responde con un listener sintético y cierra su servidor', async () => {
   let url = '';
@@ -53,4 +54,17 @@ test('importar y preparar app en un proceso hijo termina sin abrir escucha', () 
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), 'preparada');
+});
+
+test('importar el arranque no abre HTTP ni conecta a PostgreSQL', () => {
+  const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e',
+    'import "./index.ts"; console.log("importado");'], {
+    cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', timeout: 10000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), 'importado');
+});
+
+test('arranque inválido falla antes de abrir conexiones y no recurre a memoria', async () => {
+  await assert.rejects(iniciarServidor({ env: { POSTGRES_PORT: '0' }, puerto: 0 }), /validar la configuración/);
 });

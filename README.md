@@ -6,9 +6,9 @@ Aplicación web full stack desarrollada para el estudio jurídico ficticio **Doc
 
 El proyecto busca ofrecer información sobre los servicios del estudio y permitir que los clientes realicen consultas jurídicas desde la aplicación.
 
-Actualmente se encuentra implementado el flujo de formularios de consulta: un usuario puede completar y enviar una consulta desde el frontend, el backend puede recibirla y almacenarla provisionalmente, y las consultas recibidas pueden visualizarse desde otra sección de la aplicación.
+Actualmente se encuentra implementado el flujo de formularios de consulta: un usuario puede completar y enviar una consulta desde el frontend, el backend la guarda en PostgreSQL local y las consultas recibidas pueden visualizarse desde otra sección de la aplicación.
 
-El proyecto se encuentra en desarrollo. Funcionalidades como persistencia mediante base de datos, cuentas de clientes y seguimiento de casos forman parte de la evolución prevista del sistema.
+El proyecto se encuentra en desarrollo. La validación de persistencia en Supabase, las cuentas de clientes y el seguimiento de casos forman parte de la evolución pendiente del sistema.
 
 ## Estado actual
 
@@ -26,16 +26,17 @@ Actualmente se encuentran implementadas:
 - Configuración de CORS para la comunicación entre frontend y backend.
 - Ejecución conjunta de frontend y backend mediante Docker Compose.
 
-Actualmente los formularios se almacenan **provisionalmente en memoria** en el backend. Por lo tanto, los datos creados durante la ejecución se pierden al reiniciar el servidor.
+El arranque normal utiliza **PostgreSQL local mediante Sequelize**, conserva los datos al reiniciar y comienza sin registros automáticos. El almacén en memoria permanece para pruebas aisladas; no se utiliza como fallback ante errores de la base. P04 continúa pendiente de revisión de sus incrementos y de la validación posterior con Supabase.
 
 ## Stack tecnológico
 
 | Área | Tecnología | Uso |
 | --- | --- | --- |
 | Frontend | React + Vite | Interfaz de usuario |
-| Backend | Node.js + Express + TypeScript | API HTTP, validación y almacenamiento provisional |
+| Backend | Node.js + Express + TypeScript | API HTTP, validación y acceso a datos |
+| Persistencia local | PostgreSQL 17.12 + Sequelize 6 + Umzug | Consultas persistentes y migraciones explícitas |
 | Pruebas | node:test + Vitest + Testing Library | Contratos HTTP, reglas y comportamiento de la interfaz |
-| Contenedores | Docker + Docker Compose | Ejecución reproducible de frontend y backend |
+| Contenedores | Docker + Docker Compose | Ejecución reproducible de frontend, backend y PostgreSQL |
 | Paquetes | pnpm | Gestión de dependencias |
 | Control de versiones | Git / GitHub | Desarrollo mediante ramas y Pull Requests |
 
@@ -44,7 +45,6 @@ Actualmente los formularios se almacenan **provisionalmente en memoria** en el b
 Como parte de la evolución del proyecto se prevé incorporar:
 
 - **Supabase (PostgreSQL)** para persistencia.
-- **Sequelize** para acceso y modelado de datos.
 - **Caddy** como proxy inverso y para configuración HTTPS.
 - Sistema de cuentas de clientes.
 - Seguimiento de casos y comunicación con representantes.
@@ -83,7 +83,7 @@ Estas funcionalidades todavía no forman parte de la implementación actual. Su 
 ├── docs/
 │   └── decisiones-diseno.md  # Análisis y decisiones de diseño
 │
-├── docker-compose.yml        # Orquestación de frontend y backend
+├── docker-compose.yml        # Orquestación de frontend, backend y PostgreSQL
 └── README.md
 ```
 
@@ -100,18 +100,32 @@ git clone https://github.com/nicc-essp/MetodologiaDeSistemasII.git
 cd MetodologiaDeSistemasII
 ```
 
-#### 2. Construir e iniciar la aplicación
+#### 2. Preparar PostgreSQL y aplicar la migración explícita
 
-Con Docker instalado y en ejecución:
+Con Docker instalado y en ejecución, preparar las claves privadas de P03 y las herramientas del backend:
+
+```bash
+pnpm --dir backend install --frozen-lockfile
+node scripts/postgres.mjs preparar
+docker compose up -d --wait postgres
+pnpm --dir backend db:migrate
+```
+
+La migración se ejecuta desde el host con el rol migrador. El backend del contenedor recibe únicamente el secreto de aplicación. No se eliminan volúmenes para repetir la preparación.
+
+#### 3. Construir e iniciar la aplicación
 
 ```bash
 docker compose up --build
 ```
 
-Docker Compose inicia ambos servicios:
+Docker Compose inicia frontend, backend y PostgreSQL:
 
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3001`
+- PostgreSQL: `127.0.0.1:5433`, solo para herramientas locales.
+
+El backend espera disponibilidad de PostgreSQL y verifica esquema/permisos antes de escuchar HTTP. Sin conexión o sin migración, falla de forma segura y no utiliza memoria.
 
 Para detenerlos:
 
@@ -121,7 +135,7 @@ docker compose down
 
 ## PostgreSQL local para desarrollo y pruebas (P03)
 
-El entorno PostgreSQL está preparado por separado del almacenamiento de formularios: **la API todavía usa memoria**. P03 está completada y aprobada. P04.2 incorpora el modelo y las migraciones explícitas, sin conectarlos todavía a los controladores HTTP; ver [conexión y migraciones](backend/database/README.md).
+P03 está completada y aprobada. P04.2 incorpora modelo y migración; P04.3 conecta el arranque normal y la API con PostgreSQL. Las pruebas siguen pudiendo inyectar memoria en `createApp`. Ver [conexión, migraciones y arranque](backend/database/README.md).
 
 Se utiliza `postgres:17.12-bookworm`, fijado por [digest del índice oficial de imágenes](https://github.com/docker-library/repo-info/blob/master/repos/postgres/remote/17.12-bookworm.md). El servicio de desarrollo tiene un volumen nombrado `postgres_dev_data`, gestionado por Compose. Frontend, backend y PostgreSQL publican puertos únicamente en `127.0.0.1`.
 
@@ -129,8 +143,8 @@ Preparar claves locales aleatorias e iniciar solo PostgreSQL:
 
 ```powershell
 node scripts/postgres.mjs preparar
-docker compose --profile persistencia up -d --wait postgres
-docker compose --profile persistencia ps postgres
+docker compose up -d --wait postgres
+docker compose ps postgres
 ```
 
 Las tres claves quedan en `secrets/postgres/`, excluido de Git. Se montan como secretos de Compose, sin contraseñas en el YAML ni en variables `VITE_*`. El preparador nunca sobrescribe claves existentes y rechaza configuraciones incompletas. `.env.example` contiene solo parámetros públicos y rutas; no es necesario copiarlo para usar los valores predeterminados. PostgreSQL escucha en `localhost:5433`.
@@ -140,8 +154,8 @@ El administrador `postgres` solo prepara la instancia. `docker_laws_migrator` es
 Comprobar una conexión TCP autenticada con el rol de aplicación:
 
 ```powershell
-docker compose --profile persistencia exec -T postgres sh -c 'PGPASSWORD="$(cat /run/secrets/postgres_app)" psql -h 127.0.0.1 -U docker_laws_app -d "$POSTGRES_DB" -c "SELECT current_user, current_database();"'
-docker compose --profile persistencia restart postgres
+docker compose exec -T postgres sh -c 'PGPASSWORD="$(cat /run/secrets/postgres_app)" psql -h 127.0.0.1 -U docker_laws_app -d "$POSTGRES_DB" -c "SELECT current_user, current_database();"'
+docker compose restart postgres
 ```
 
 `pg_isready` comprueba disponibilidad; la consulta anterior comprueba autenticación. El volumen conserva datos al reiniciar o detener el servicio. Los scripts iniciales se ejecutan únicamente con un volumen vacío: modificar las claves después no cambia automáticamente las contraseñas de una instancia inicializada. No borrar el volumen para intentar reparar esa situación.
@@ -157,7 +171,7 @@ node scripts/postgres.mjs verificar --limpiar
 
 `--limpiar` autoriza retirar únicamente recursos nuevos de esa ejecución, después de comprobar nombres y etiquetas. Se rechazan proyectos/volúmenes preexistentes, secretos ajenos, puertos públicos y motores Docker remotos TCP/SSH. No se ejecutan limpiezas globales, `prune` ni borrados sobre una URL de base proporcionada externamente. Sin `--limpiar`, la verificación conserva sus recursos detenidos e informa sus nombres y el directorio temporal de claves. Si no puede acreditar propiedad o completar la limpieza, falla y deja los recursos para revisión.
 
-El arranque habitual `docker compose up --build` conserva frontend/backend sin exigir PostgreSQL, que pertenece al perfil optativo `persistencia`. Las migraciones de P04.2 se ejecutan por separado y nunca al iniciar Express. La integración HTTP con PostgreSQL y la validación en Supabase siguen pendientes. Continuar usando solo datos ficticios en este entorno sin autenticación de usuarios.
+PostgreSQL es ahora una dependencia del arranque normal y no requiere activar un perfil. Las migraciones se ejecutan por separado y nunca al iniciar Express. La validación en Supabase sigue pendiente. Continuar usando solo datos ficticios en este entorno sin autenticación de usuarios.
 
 ## Ejecución sin Docker
 
@@ -180,6 +194,9 @@ http://localhost:5173
 
 ```bash
 pnpm --dir backend install --frozen-lockfile
+node scripts/postgres.mjs preparar
+docker compose up -d --wait postgres
+pnpm --dir backend db:migrate
 pnpm --dir backend start
 ```
 
@@ -278,7 +295,7 @@ pnpm --dir frontend lint
 pnpm --dir frontend build
 ```
 
-El backend usa un perfil TypeScript estricto sin emisión y seis archivos explícitos de pruebas con `node:test` y tsx. La prueba de tipos verifica el comando y la configuración reales, todos los archivos pertinentes y un error controlado en una copia temporal; no modifica las fuentes originales. Las pruebas HTTP abren un puerto efímero propio y lo cierran. Las pruebas frontend usan red controlada, datos ficticios y limpieza de DOM/estado.
+El backend usa un perfil TypeScript estricto sin emisión y archivos explícitos de pruebas con `node:test` y tsx. La prueba de tipos verifica el comando y la configuración reales, todos los archivos pertinentes y un error controlado en una copia temporal; no modifica las fuentes originales. La suite normal usa memoria y no requiere PostgreSQL. `pnpm --dir backend test:postgres --limpiar` ejecuta migraciones y API sobre instancias nuevas separadas, con las protecciones de P03. Las pruebas HTTP abren un puerto efímero propio y lo cierran. Las pruebas frontend usan red controlada, datos ficticios y limpieza de DOM/estado.
 
 En Windows, si pnpm 12.3.4 falla al administrar su propio directorio durante la instalación, con ese gestor ya disponible se puede reutilizarlo explícitamente: `pnpm --dir frontend with current install --frozen-lockfile` (equivalente para backend). No cambiar versiones para eludir un fallo sin comprobar su compatibilidad.
 
@@ -294,7 +311,7 @@ El selector opcional `--componente backend` o `--componente frontend` permite co
 
 Las etiquetas, el teclado y las regiones de estado tienen pruebas automatizadas. **La revisión manual de accesibilidad del prototipo refactorizado fue completada satisfactoriamente por el usuario con Chrome y Narrador de Windows, en Windows 10.** El usuario confirmó teclado, foco visible, identificación de los siete campos, validación, anuncios de pendiente/éxito/error y navegación por consultas, incluidos fallos de red, con datos ficticios en localhost y 127.0.0.1. Esta evidencia humana complementa las pruebas automatizadas; jsdom no la reemplaza.
 
-Las nuevas pantallas o funcionalidades y los cambios en los flujos afectados requerirán sus propias revisiones de accesibilidad; la revisión del prototipo no acredita resultados futuros ni conformidad completa con una norma. El prototipo conserva memoria volátil y acceso sin autenticación: utilizar exclusivamente datos sintéticos, sin publicación con datos personales reales.
+Las nuevas pantallas o funcionalidades y los cambios en los flujos afectados requerirán sus propias revisiones de accesibilidad; la revisión del prototipo no acredita resultados futuros ni conformidad completa con una norma. La aplicación conserva acceso sin autenticación: utilizar exclusivamente datos sintéticos, sin publicación con datos personales reales.
 
 ## Flujo actual de formularios
 
@@ -310,7 +327,7 @@ formularioService.js
 POST /formulario
         │
         ▼
-Backend / almacenamiento provisional
+Backend / Sequelize / PostgreSQL local
         │
         ▼
 GET /formulario

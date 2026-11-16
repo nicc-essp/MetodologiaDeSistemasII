@@ -5,4 +5,4 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
 EXPOSE 3001
-CMD ["pnpm", "start"]
+CMD ["node", "--env-file-if-exists=../.env", "--import", "tsx", "index.ts"]

@@ -31,3 +31,19 @@ test('validador: conserva texto válido y solo proyecta los siete campos', () =>
   assert.deepEqual(validarFormulario(entrada), { ok: true, datos: esperado });
   assert.equal(entrada.extra, true);
 });
+
+for (const campo of Object.keys(consultaFicticia)) {
+  for (const invalido of ['\u0000', '\uD800', '\uDFFF']) {
+    test(`validador: rechaza NUL/sustituto aislado en ${campo}: ${JSON.stringify(invalido)}`, () => {
+      assert.deepEqual(validarFormulario({ ...consultaFicticia, [campo]: `texto${invalido}` }), {
+        ok: false, message: 'Los campos del formulario contienen caracteres no válidos',
+      });
+    });
+  }
+}
+
+test('validador: conserva pares sustitutos válidos, acentos, combinaciones, espacios y saltos', () => {
+  const entrada = { ...consultaFicticia, mensaje: '  Prueba 😀 ⚖️ cafe\u0301\nOtra línea\r\n  ', extra: '\uD800' };
+  const { extra: _extra, ...datos } = entrada;
+  assert.deepEqual(validarFormulario(entrada), { ok: true, datos });
+});

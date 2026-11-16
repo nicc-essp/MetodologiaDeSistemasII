@@ -141,6 +141,31 @@ test('HTTP mantiene el mensaje histórico de campo ausente', async () => {
   });
 });
 
+test('HTTP rechaza texto mal formado y bytes UTF-8 inválidos antes del almacenamiento', async () => {
+  for (const mensaje of ['texto\u0000', '\uD800', '\uDFFF']) {
+    await comprobarRechazo(JSON.stringify({ ...consultaFicticia, mensaje }));
+  }
+  const almacen = crearAlmacenFormularios([]);
+  const cuerpo = Buffer.from(JSON.stringify({ ...consultaFicticia, mensaje: 'MARCADOR_UTF8' }));
+  cuerpo[cuerpo.indexOf('MARCADOR_UTF8')] = 0xff;
+  await withHttp(createApp({ almacen }), async base => {
+    const response = await fetch(`${base}/formulario`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: new Uint8Array(cuerpo) });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await almacen.listar(), []);
+  });
+});
+
+test('HTTP conserva JSON válido con charset UTF-16LE', async () => {
+  await withHttp(createApp({ almacen: crearAlmacenFormularios([]) }), async base => {
+    const cuerpo = Buffer.from(JSON.stringify(consultaFicticia), 'utf16le');
+    const response = await fetch(`${base}/formulario`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-16le' }, body: new Uint8Array(cuerpo) });
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), { id: 1, ...consultaFicticia });
+  });
+});
+
 test('HTTP límite exacto de 102400 bytes y exceso 413 sin efectos', async () => {
   const longitudBase = Buffer.byteLength(JSON.stringify({ ...consultaFicticia, mensaje: '' }));
   const body = JSON.stringify({ ...consultaFicticia, mensaje: 'a'.repeat(102400 - longitudBase) });
