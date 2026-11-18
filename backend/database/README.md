@@ -1,6 +1,6 @@
 # Persistencia de consultas — P04 técnicamente completada
 
-P04.2 incorpora Sequelize y migraciones; P04.3 conecta la API HTTP con PostgreSQL local; P04.4a incorpora perfiles y TLS. **P04.4b fue validada y aprobada por Homero el 18/11/2026**, con persistencia real en un proyecto Supabase exclusivo de desarrollo y React/Express locales. P04 está técnicamente completada por la evidencia local y remota, registrada por separado abajo. P01/P02 conservan su revisión formal pendiente.
+P04.2 incorpora Sequelize y migraciones; P04.3 conecta la API HTTP con PostgreSQL local; P04.4a incorpora perfiles y TLS. **P04.4b fue validada y aprobada por Homero el 18/11/2026**, con persistencia real en un proyecto Supabase exclusivo de desarrollo y React/Express locales. P04 está técnicamente completada por la evidencia local y remota, registrada por separado abajo. **P01–P04 están completadas para el incremento inicial**: P01/P02 cuentan con auditoría y aprobación formal independientes del 18/11/2026, y P03 conserva su cierre aprobado. Ver [criterios y evidencias en planificación](../../docs/planificación.md#8-criterios-de-aceptación-y-pruebas); no se completan P05–P13.
 
 **La memoria se conserva para pruebas aisladas, sin fallback en ejecución normal.** Las migraciones siguen siendo explícitas. El destino predeterminado y Compose permanecen locales; la base remota operativa no constituye un despliegue público ni incorpora autenticación/autorización de clientes.
 
@@ -24,7 +24,7 @@ Fuentes: [compatibilidad de Sequelize](https://sequelize.org/releases/), [tipos 
 
 ## Configuración y ejecución explícita
 
-Desde la raíz del repositorio, preparar el PostgreSQL de desarrollo según P03:
+Desde la raíz del repositorio, con Node/pnpm y Docker/Compose disponibles, dependencias backend instaladas mediante `pnpm --dir backend install --frozen-lockfile` y una terminal con configuración exclusivamente local, preparar el PostgreSQL de desarrollo según P03:
 
 ```powershell
 node scripts/postgres.mjs preparar
@@ -35,6 +35,8 @@ pnpm --dir backend start
 ```
 
 Los comandos `start` y `db:*` cargan el `.env` opcional de la raíz con Node, sin agregar dotenv; las variables del proceso tienen prioridad. Se reutilizan `POSTGRES_DB`, `POSTGRES_PORT` y `POSTGRES_SECRETS_DIR` de P03, más `POSTGRES_HOST` para el cliente. Predeterminados: `127.0.0.1:5433`, `docker_laws_dev`, `secrets/postgres/`. Una ruta relativa de secretos se interpreta desde la raíz del repositorio. `.env.example` contiene parámetros públicos; las contraseñas siguen en archivos privados ignorados y no se imprimen.
+
+El preparador genera las claves en `secrets/postgres/` de esta copia; no importa claves ajenas ni las rota en una instancia inicializada. Los comandos anteriores utilizan el proyecto Compose de esa carpeta. Para ensayar desde cero sin reutilizar recursos habituales, seguir la [secuencia aislada del checklist](../../docs/CHECKLIST.md#134-secuencia-powershell-para-la-próxima-reproducción-limpia-pendiente); todavía no fue ejecutada. En la modalidad con aplicaciones en el host solo PostgreSQL requiere Docker; en la modalidad Compose los tres servicios se ejecutan en contenedores. Ver [README principal](../../README.md#instalación-e-inicio).
 
 `leerConfiguracionPostgres('aplicacion')` selecciona exclusivamente `docker_laws_app`/`app.txt`; el runner utiliza `docker_laws_migrator`/`migrator.txt`. No hay selección del usuario administrador ni fallback ante claves ausentes. `crearConexionPostgres` prepara una instancia sin conectar: `authenticate`, consultas y cierre son explícitos.
 
@@ -178,7 +180,7 @@ Ninguna prueba sintética o handshake en loopback acredita Supabase. La evidenci
 - **Flujo real:** GET `/formulario` inicialmente vacío; envío satisfactorio de un formulario ficticio desde React hacia Express local conectado mediante Sequelize a Supabase. Registro con ID 1 comprobado por HTTP y SQL Editor. El contenido personal ficticio no se reproduce en estos documentos.
 - **Persistencia:** se detuvo y reinició únicamente el backend; el registro permaneció en la base remota. No se presenta como prueba de recuperación del servicio Supabase ni como reinicio de su infraestructura.
 
-**Criterios de cierre:** contrato asíncrono y rutas/JSON existentes, búsqueda por ID, idempotencia de migración, concurrencia, validaciones, fallos seguros y recuperación controlada se acreditaron mediante la regresión local. La primera migración remota, roles/TLS y flujo real con persistencia se acreditan mediante la evidencia de Homero. No se afirma que las suites locales se hayan ejecutado contra Supabase, que haya habido una segunda migración remota ni que se hayan realizado pruebas destructivas remotas. Con ambos hitos cubiertos, **P04 está técnicamente completada**; P01 y P02 conservan su revisión formal separada.
+**Criterios de cierre:** contrato asíncrono y rutas/JSON existentes, búsqueda por ID, idempotencia de migración, concurrencia, validaciones, fallos seguros y recuperación controlada se acreditaron mediante la regresión local. La primera migración remota, roles/TLS y flujo real con persistencia se acreditan mediante la evidencia de Homero. No se afirma que las suites locales se hayan ejecutado contra Supabase, que haya habido una segunda migración remota ni que se hayan realizado pruebas destructivas remotas. Con ambos hitos cubiertos, **P04 está técnicamente completada**. P01 y P02 también están completadas y aprobadas por su auditoría independiente, registrada en planificación; ese cierre documental no añade resultados a la validación Supabase.
 
 **Límites operativos:** la base remota es operativa para el prototipo de desarrollo; la aplicación no está desplegada públicamente. Continúan pendientes autenticación y autorización de usuarios, reglas de acceso a consultas y decisiones de despliegue, Caddy y HTTPS de la aplicación. El TLS verificado hacia PostgreSQL no acredita HTTPS del sitio. Se mantienen datos ficticios, credenciales en archivos privados excluidos de Git, ejecución explícita de migraciones con confirmación del proyecto y prohibición de dirigir los inicializadores, suites y limpiezas locales hacia Supabase. No se publican secretos ni se autoriza uso productivo por este cierre.
 
