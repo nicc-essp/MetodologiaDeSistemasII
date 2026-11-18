@@ -1,14 +1,12 @@
-import { Router } from "express";
-import {
-    createFormulario,
-    getFormulario,
-    getFormularios
-} from "../controllers/formulario.controller";
+import { Router } from 'express';
+import { crearControladorFormularios } from '../controllers/formulario.controller';
+import type { AlmacenFormularios } from '../data/formularios-guardados';
 
-const router = Router();
-
-router.get("/", getFormularios);
-router.get("/:id", getFormulario);
-router.post("/", createFormulario);
-
-export default router;
+export function crearRouterFormularios(almacen: AlmacenFormularios) {
+  const router = Router();
+  const controlador = crearControladorFormularios(almacen);
+  router.get('/', controlador.getFormularios);
+  router.get('/:id', controlador.getFormulario);
+  router.post('/', controlador.createFormulario);
+  return router;
+}

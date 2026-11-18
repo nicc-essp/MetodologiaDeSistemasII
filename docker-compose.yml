@@ -1,9 +1,56 @@
 services:
   frontend:
     build: ./frontend
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3001}
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
   backend:
     build: ./backend
+    environment:
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      POSTGRES_TARGET: local
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-docker_laws_dev}
+      POSTGRES_SECRETS_DIR: /run/secrets/postgres
+    secrets:
+      - source: postgres_app
+        target: /run/secrets/postgres/app.txt
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
+  postgres:
+    image: postgres:17.12-bookworm@sha256:40865bc877a289da75963d97d72b59633f639fc5af7a4e856bfa3714cae5b536
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-docker_laws_dev}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --auth-host=scram-sha-256
+      APP_PASSWORD_FILE: /run/secrets/postgres_app
+      MIGRATOR_PASSWORD_FILE: /run/secrets/postgres_migrator
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./docker/postgres/inicializar.sh:/docker-entrypoint-initdb.d/010-roles.sh:ro
+    secrets: [postgres_admin, postgres_app, postgres_migrator]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U postgres -d "$${POSTGRES_DB}"']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  postgres_dev_data:
+
+secrets:
+  postgres_admin:
+    file: ${POSTGRES_SECRETS_DIR:-./secrets/postgres}/admin.txt
+  postgres_app:
+    file: ${POSTGRES_SECRETS_DIR:-./secrets/postgres}/app.txt
+  postgres_migrator:
+    file: ${POSTGRES_SECRETS_DIR:-./secrets/postgres}/migrator.txt

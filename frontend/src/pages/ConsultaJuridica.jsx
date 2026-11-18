@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { crearFormulario } from '../services/formularioService';
+import { crearFormulario, obtenerMensajeError } from '../services/formularioService';
 
 export function ConsultaJuridica() {
   const [formData, setFormData] = useState({
@@ -25,6 +25,7 @@ export function ConsultaJuridica() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (enviando) return;
 
     setEnviando(true);
     setEnviado(false);
@@ -45,8 +46,7 @@ export function ConsultaJuridica() {
         mensaje: ''
       });
     } catch (error) {
-      console.error(error);
-      setError('No se pudo enviar la consulta. Intente nuevamente.');
+      setError(obtenerMensajeError(error, 'envio'));
     } finally {
       setEnviando(false);
     }
@@ -62,11 +62,12 @@ export function ConsultaJuridica() {
           con Docker-laws.
         </p>
 
-        <form onSubmit={handleSubmit} className="legal-form">
+        <form onSubmit={handleSubmit} className="legal-form" aria-busy={enviando}>
           <div className="form-row">
             <div className="form-group">
-              <label>Nombre:</label>
+              <label htmlFor="consulta-nombre">Nombre:</label>
               <input
+                id="consulta-nombre"
                 type="text"
                 name="nombre"
                 value={formData.nombre}
@@ -77,8 +78,9 @@ export function ConsultaJuridica() {
             </div>
 
             <div className="form-group">
-              <label>Apellido:</label>
+              <label htmlFor="consulta-apellido">Apellido:</label>
               <input
+                id="consulta-apellido"
                 type="text"
                 name="apellido"
                 value={formData.apellido}
@@ -91,8 +93,9 @@ export function ConsultaJuridica() {
 
           <div className="form-row">
             <div className="form-group">
-              <label>DNI:</label>
+              <label htmlFor="consulta-dni">DNI:</label>
               <input
+                id="consulta-dni"
                 type="text"
                 name="dni"
                 value={formData.dni}
@@ -103,8 +106,9 @@ export function ConsultaJuridica() {
             </div>
 
             <div className="form-group">
-              <label>Teléfono / Celular:</label>
+              <label htmlFor="consulta-telefono">Teléfono / Celular:</label>
               <input
+                id="consulta-telefono"
                 type="tel"
                 name="telefono"
                 value={formData.telefono}
@@ -116,8 +120,9 @@ export function ConsultaJuridica() {
           </div>
 
           <div className="form-group">
-            <label>Correo Electrónico:</label>
+            <label htmlFor="consulta-email">Correo Electrónico:</label>
             <input
+              id="consulta-email"
               type="email"
               name="email"
               value={formData.email}
@@ -128,8 +133,9 @@ export function ConsultaJuridica() {
           </div>
 
           <div className="form-group">
-            <label>Asunto:</label>
+            <label htmlFor="consulta-asunto">Asunto:</label>
             <input
+              id="consulta-asunto"
               type="text"
               name="asunto"
               value={formData.asunto}
@@ -140,8 +146,9 @@ export function ConsultaJuridica() {
           </div>
 
           <div className="form-group">
-            <label>Detalle del Caso:</label>
+            <label htmlFor="consulta-mensaje">Detalle del Caso:</label>
             <textarea
+              id="consulta-mensaje"
               name="mensaje"
               rows="4"
               value={formData.mensaje}
@@ -159,14 +166,11 @@ export function ConsultaJuridica() {
             {enviando ? 'Enviando...' : 'Enviar Solicitud Formal'}
           </button>
 
-          {enviado && (
-            <p>La consulta fue enviada correctamente.</p>
-          )}
-
-          {error && (
-            <p>{error}</p>
-          )}
         </form>
+        <p role="status">
+          {enviando ? 'Enviando consulta...' : enviado ? 'La consulta fue enviada correctamente.' : ''}
+        </p>
+        {error && <p role="alert">{error}</p>}
       </div>
     </section>
   );
