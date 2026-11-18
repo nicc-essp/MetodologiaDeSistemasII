@@ -1,6 +1,6 @@
 # Auditoría práctica de Docker-laws — Taller III 2026
 
-**Lectura vigente:** las secciones 1–12 conservan íntegramente el registro de la auditoría original del 18/11/2026, incluidos sus hallazgos y resultados. La [actualización documental de la sección 13](#13-actualización-documental-y-preparación-de-la-reproducción-limpia--18112026) registra las correcciones posteriores, la rama oficial `main` y los pendientes actuales. Para el próximo ensayo utilizar la secuencia de 13.4, que sustituye operativamente al ejemplo preliminar de la sección 11. **La reproducción limpia sigue PENDIENTE; no se han ejecutado nuevas suites ni cambiado las 437 pruebas históricas.**
+**Lectura vigente:** las secciones 1–12 conservan íntegramente la auditoría original del 18/11/2026; la sección 13 conserva la corrección documental y el procedimiento preparado antes del ensayo. Sus estados y pendientes describen esos momentos. La [actualización posterior de la sección 14](#14-reproducción-limpia-y-cierre-documental-de-la-auditoría--18112026) registra la reproducción limpia realizada por Homero el mismo día, con supervisión de ChatGPT: **14 CUMPLIDO, 0 PARCIAL, 0 NO CUMPLIDO y 0 NO VERIFICADO; dictamen orientativo CONFORME respecto de los mínimos prácticos**, sin constituir una calificación oficial. Se confirmaron nuevamente los mismos **437 casos hoja únicos**, sin sumarlos a los históricos. Durante esta edición no se repitieron instalaciones ni pruebas.
 
 ## 1. Identificación y alcance
 
@@ -584,3 +584,150 @@ Conservar el volumen y la carpeta de esta copia hasta revisar los resultados; no
 - No hay una decisión funcional nueva que aprobar para estas correcciones. La preparación teórica individual, adaptación de P05–P13, cuentas/permisos y despliegue siguen fuera del trabajo realizado.
 
 **Alcance real de la actualización:** solo documentación y controles de lectura/formato; sin instalaciones, suites nuevas, migraciones, conexiones Supabase ni operaciones Git de escritura. El dictamen permanece **CON OBSERVACIONES** y los resultados históricos de las secciones 1–12 permanecen intactos.
+
+## 14. Reproducción limpia y cierre documental de la auditoría — 18/11/2026
+
+### 14.1. Fuente de evidencia y referencias verificadas
+
+Actualización posterior a las secciones 1–13. **Fuente de los resultados de instalación, ejecución y pruebas: reproducción realizada personalmente por Homero el 18/11/2026, bajo supervisión paso a paso de ChatGPT, y comunicada por el usuario para este registro.** Codex documenta esos resultados sin repetir instalaciones, suites, migraciones, arranques ni conexiones a bases de datos. Los identificadores R-01–R-13 siguientes pertenecen a esta reproducción; no reemplazan los E-01–E-13 de la auditoría original.
+
+Durante esta edición solo se hicieron lecturas y controles documentales. Se leyó íntegramente el checklist existente y se verificaron las referencias Git de ambas copias. Los cinco documentos contrastados —este checklist, `README.md`, `frontend/README.md`, `docs/decisiones-diseno.md` y `backend/database/README.md`— tienen los mismos identificadores de blob en ambos commits de partida. Esto confirma que la auditoría y sus correcciones anteriores ya estaban incorporadas al clon de entrega.
+
+| Dato | Referencia y alcance |
+| --- | --- |
+| Repositorio habitual donde se edita este archivo | `C:\Users\Homero\Desktop\Metodologia II\MetodologiaDeSistemasII`; rama `docs/checklist`; HEAD `883b5bdf1f2ada692492b4fabb1934861e645888`, `docs: corregir documentación y preparar reproducción de Taller III`; estado inicial limpio. No se cambió de rama. |
+| Clon nuevo e independiente utilizado para la reproducción | `C:\Users\Homero\Desktop\Docker-laws-TallerIII-limpio`; obtenido del repositorio público, sin copiar credenciales privadas de la copia habitual. |
+| Referencia reproducida | Rama `main`, commit `1c5258dafc60e9736588036cb11e551a96c2918e` (`1c5258d`), `Merge pull request #27 from nicc-essp/develop`. Rama, SHA, descripción y estado limpio corroborados mediante Git local de solo lectura. No se consultó nuevamente el remoto ni se actualizaron referencias. |
+| Contenido de la entrega ensayada | Incluye `docs/CHECKLIST.md` hasta la sección 13 y las correcciones documentales anteriores. Esta sección 14 se agrega después del ensayo y requiere revisión e integración manuales posteriores. |
+| Herramientas informadas del ensayo | Node.js 22.23.4, pnpm 12.3.4, Docker 29.4.2, Docker Compose 5.1.3 y PostgreSQL 17.12; contexto Docker `desktop-linux`. No son nuevas mediciones de esta edición. |
+| Fuente oficial del diagnóstico | La misma consigna y el mismo desglose práctico de la sección 3. El SHA-256 del PDF local sigue siendo `6311ac754cc95ef3accec6cf172bf57a9c605ae4cb32673f0be363d168baabf7`; no se agregan requisitos. |
+
+Las menciones a reproducción o integración pendientes en la sección 13 y en los README describen el estado anterior al ensayo. Los resultados posteriores y el seguimiento vigente quedan registrados aquí. Se mantienen las instrucciones existentes de instalación y ejecución; esta edición modifica exclusivamente el checklist.
+
+### 14.2. Instalación, PostgreSQL y migración en la copia nueva
+
+| ID | Comando o procedimiento informado | Resultado comprobado por el usuario |
+| --- | --- | --- |
+| R-01 | `pnpm --dir backend install --frozen-lockfile` | 175 paquetes instalados correctamente; se generó `backend/node_modules`. |
+| R-02 | `pnpm --dir frontend install --frozen-lockfile` | 212 paquetes instalados correctamente; se generó `frontend/node_modules`. Git permaneció limpio después de ambas instalaciones. |
+| R-03 | Configuración local nueva; `node scripts/postgres.mjs preparar`; inicio de PostgreSQL mediante Compose | Proyecto exclusivo `docker-laws-t3-23ae8ddeaedf4dbc82864185c845190e`, volumen propio y puerto `127.0.0.1:32773`; contenedor en estado `healthy`. Las credenciales se generaron en esta copia y se verificó la existencia de sus archivos, sin imprimir su contenido ni incorporarlos a Git. |
+| R-04 | `pnpm --dir backend db:migrate` y `pnpm --dir backend db:status` | `Migraciones aplicadas: 001-crear-consultas`; el estado posterior informó esa migración aplicada y ninguna pendiente. Destino exclusivamente PostgreSQL local, sin Supabase. |
+
+**Límite de la instalación:** fue una copia nueva con instalación mediante ambos lockfiles, pero pnpm reutilizó paquetes de su caché local. No acredita una descarga completa en una máquina sin caché. No se reutilizaron los directorios `node_modules` de la copia habitual.
+
+### 14.3. Recorrido funcional integral y persistencia
+
+**R-05 — Modalidad realmente ensayada:** React mediante Vite y Express ejecutados localmente; PostgreSQL en Docker, con acceso mediante Sequelize. Express se inició limitado a `127.0.0.1:3001`. No se atribuye este resultado a contenedores completos de frontend/backend ni a un despliegue público.
+
+El endpoint `/health` respondió `status: ok` y la base comenzó vacía. Durante el recorrido supervisado se registró esta consulta exclusivamente ficticia:
+
+| Campo | Valor de demostración |
+| --- | --- |
+| `nombre` | Juan |
+| `apellido` | Prueba |
+| `dni` | 12345678 |
+| `telefono` | 2915551234 |
+| `email` | juan@example.com |
+| `asunto` | Prueba instalación limpia |
+| `mensaje` | Consulta ficticia para verificar el funcionamiento integral de Docker-laws. |
+
+GET `/formulario` devolvió el registro con **`id: 1`** y los siete campos esperados. Después se detuvo y reinició únicamente Express; se repitieron las consultas a `/health` y `/formulario`. El backend volvió a iniciar correctamente y el registro conservó el mismo identificador y contenido. Esto acredita persistencia real en PostgreSQL, independiente de la memoria del proceso Express; no se presenta como un reinicio de PostgreSQL ni como una nueva revisión de accesibilidad.
+
+Después de las suites automatizadas se comprobó nuevamente que la base de demostración conservaba la consulta ficticia y que el backend seguía saludable. Las pruebas PostgreSQL utilizaron las instancias descartables del runner protegido, separadas de esta base de demostración.
+
+### 14.4. Suites y verificaciones adicionales de la reproducción
+
+Todas las ejecuciones de esta tabla fueron realizadas por el usuario desde el clon nuevo. **No se ejecutaron nuevamente para redactar esta actualización.**
+
+| ID | Grupo y comando | Casos hoja únicos aprobados | Fallidos |
+| --- | --- | --- | --- |
+| R-06 | Backend: `pnpm --dir backend test` | 288 | 0 |
+| R-07 | Frontend: `pnpm --dir frontend test` | 66 | 0 |
+| R-08 | PostgreSQL descartable: `pnpm --dir backend test:postgres --limpiar` | 18 | 0 |
+| R-09 | Scripts e infraestructura: `node --test scripts/postgres.test.mjs scripts/verificar-docker.test.mjs` | 65 | 0 |
+| Total | 288 + 66 + 18 + 65 | **437** | **0** |
+
+PostgreSQL informó **20 nodos TAP: 18 subpruebas hoja y 2 contenedores**. Los contenedores no se cuentan como casos adicionales. Esta reproducción confirma los mismos 437 casos únicos del inventario histórico; no produce 874 casos distintos por sumar ambas ejecuciones. Tampoco se agregan al total los controles estáticos, los fixtures ni las comprobaciones manuales.
+
+| ID | Verificación adicional informada | Resultado y alcance |
+| --- | --- | --- |
+| R-10 | `pnpm --dir backend typecheck` | Exit 0. |
+| R-10 | `pnpm --dir frontend lint` | Aprobado. |
+| R-10 | `pnpm --dir frontend build` | Aprobado; se generó `frontend/dist/index.html` en el clon nuevo. A diferencia de E-06, la salida no fue un directorio temporal externo. |
+| R-11 | Docker Compose de pruebas, `docker-compose.test.yml`: `config --quiet` | Exit 0; valida la configuración, sin acreditar por sí solo ejecución de todas las imágenes de aplicación. No se aportaron los argumentos adicionales de esta invocación. |
+| R-12 | `node scripts/verificar-docker.mjs --modo contexto` | Aprobado: 24 fixtures sintéticos por componente, controles públicos conservados y ningún archivo privado detectado en los contextos exportados. Son controles de las categorías ensayadas, no una auditoría universal de secretos. |
+
+`frontend/src/assets/images/ballena.jpg` continúa teniendo aproximadamente 25 MB. Su optimización sigue siendo opcional; no se modificó la imagen ni se atribuye una mejora de tamaño a este build.
+
+### 14.5. Detención comprobada y conservación de recursos
+
+**R-13 — Detención informada de PostgreSQL:**
+
+```powershell
+docker compose --project-name $proyectoEnsayo --env-file .env stop postgres
+```
+
+En esa terminal, `$proyectoEnsayo` correspondía a `docker-laws-t3-23ae8ddeaedf4dbc82864185c845190e`. El contenedor terminó en **`Exited (0)`** y se conservó el volumen:
+
+```text
+docker-laws-t3-23ae8ddeaedf4dbc82864185c845190e_postgres_dev_data
+```
+
+El clon continuó sin modificaciones versionadas. No se ejecutaron comandos de eliminación de volúmenes ni limpieza global de Docker. **No se aportó comprobación final de detención de Express y Vite; su estado final no se da por verificado.** La salud del backend registrada después de las suites corresponde al momento anterior a la detención de PostgreSQL.
+
+### 14.6. Seguimiento vigente de los hallazgos
+
+Los estados anteriores de las secciones 9 y 13 se conservan como antecedentes. El cierre se refiere a la versión y a la modalidad efectivamente reproducidas.
+
+| ID | Estado posterior al ensayo | Evidencia y límite |
+| --- | --- | --- |
+| P1-01 — Rama de entrega | RESUELTO | `main` en `1c5258d` contiene la versión técnica y documental ensayada; el clonado documentado selecciona esa rama. Las referencias antiguas de la copia habitual no describen esta entrega. |
+| P2-01 — Estados documentales | RESUELTO E INTEGRADO | README principal, decisiones y guía de persistencia reconocen los cierres independientes de P01/P02 y el cierre de P04. Sus blobs coinciden entre el clon `main` y la copia habitual. Los antecedentes fechados se conservan. |
+| P2-02 — Instrucciones Docker | RESUELTO para la modalidad ensayada | Las guías distinguen Compose de aplicaciones en el host con PostgreSQL en Docker; R-03–R-05 y R-13 acreditan preparación, migración, ejecución y detención de PostgreSQL en esta última modalidad. No se acredita una reconstrucción completa de imágenes de aplicación. |
+| P2-03 — Reproducción integral | RESUELTO para React/Express locales y PostgreSQL en Docker | Copia nueva, instalación con lockfiles, configuración propia, API e interfaz en ejecución, consulta ficticia, persistencia tras reiniciar Express, 437 casos aprobados y controles adicionales. Se conserva el límite de caché de pnpm y la falta de comprobación final de los procesos Express/Vite. |
+| P2-04 — Integración del checklist | RESUELTO para la auditoría y las correcciones anteriores | `main` en `1c5258d` ya incluye el checklist histórico y las correcciones de la sección 13, corroborados mediante sus blobs. Esta actualización posterior aún requiere revisión e integración manuales; no se afirma que ya forme parte de ese commit. |
+| P3-02 — README frontend | RESUELTO E INTEGRADO | La guía de Docker-laws sustituye la plantilla Vite, explica instalación, ejecución, API/PG y comprobaciones, y está incluida en el clon ensayado. |
+
+P3-01 (imagen de portada) y P3-03 (imagen Node y mantenimiento de transitivas) permanecen abiertos como **mejoras opcionales**. No impiden el cumplimiento de los mínimos prácticos ni habilitan cambios adicionales. P05–P13 no se reorganizan ni se consideran completadas por este ensayo.
+
+### 14.7. Matriz y dictamen vigentes respecto de los mínimos prácticos
+
+Esta matriz actualiza la lectura de los 14 requisitos de la sección 3, preservando íntegramente su evaluación histórica. La evidencia anterior sigue vigente para los requisitos que no dependían del ensayo; R-01–R-13 y la integración documental completan los tres requisitos antes parciales.
+
+| ID | Requisito práctico | Estado vigente | Fundamento |
+| --- | --- | --- | --- |
+| T3-01 | Repositorio actualizado | CUMPLIDO | Versión técnica y documentación integradas en el `main` ensayado, identificado por su commit en 14.1. |
+| T3-02 | Repositorio accesible | CUMPLIDO | Acceso público histórico y nuevo clonado comunicado por el usuario; referencia local corroborada. |
+| T3-03 | Proyecto demostrable | CUMPLIDO | R-05: aplicaciones locales con PostgreSQL real, consulta ficticia recuperada por HTTP y persistencia tras reiniciar Express desde copia nueva. |
+| T3-04 | Documentación vigente para instalar | CUMPLIDO | Rama y herramientas documentadas e integradas; R-01/R-02: instalación correcta con ambos lockfiles en copia nueva. Reutilizó caché de pnpm. |
+| T3-05 | Documentación vigente para configurar | CUMPLIDO | Guías y controles anteriores; R-03/R-04: configuración local y claves nuevas, PostgreSQL saludable y migración aplicada sin pendientes. |
+| T3-06 | Documentación vigente para ejecutar | CUMPLIDO | Contradicciones corregidas e integradas; R-03–R-05 y R-13 acreditan el recorrido local y la detención de PostgreSQL con volumen conservado. No se presume el cierre final de Express/Vite. |
+| T3-07 | Documentación para comprender el proyecto | CUMPLIDO | Arquitectura, contratos, decisiones y guía de persistencia de las secciones 6/7 y documentos integrados. |
+| T3-08 | Tests automatizados ejecutables | CUMPLIDO | R-06–R-09: las cuatro suites principales pasaron desde la copia nueva, con 437 casos únicos y 0 fallidos. |
+| T3-09 | Al menos un comportamiento relevante comprobado | CUMPLIDO | Casos históricos y R-05: registro, recuperación y persistencia real de una consulta. |
+| T3-10 | Casos seleccionados y justificados | CUMPLIDO | Los diez casos normales, límite y error de la sección 5 ya están integrados en la entrega ensayada. |
+| T3-11 | Evidencia de revisión o mejora de calidad | CUMPLIDO | Código, commits y resultados de la sección 7; typecheck, lint y verificador de contextos confirmados en R-10/R-12. |
+| T3-12 | Evidencias ubicables en el repositorio | CUMPLIDO | Rutas y pruebas de las secciones 4–7, junto con el checklist histórico, incluidos en el commit ensayado. |
+| T3-13 | Ejecutar o explicar la ejecución de tests | CUMPLIDO | Comandos documentados y ejecutados por el usuario desde la copia nueva en R-06–R-09; sin evaluar su preparación teórica individual. |
+| T3-14 | Interpretar resultados y limitaciones | CUMPLIDO | Conteos sin duplicaciones y distinción entre evidencia histórica, ensayo informado, controles de esta edición y límites de 14.8. |
+
+**Resumen vigente: 14 CUMPLIDO, 0 PARCIAL, 0 NO CUMPLIDO y 0 NO VERIFICADO.** T3-03, T3-04 y T3-06 pasan de PARCIAL a CUMPLIDO. Los estados auxiliares NO VERIFICADO de aspectos ajenos a esos mínimos no agregan requisitos a la matriz.
+
+**Dictamen orientativo: CONFORME respecto de los mínimos prácticos de la consigna oficial.** La reproducción informada y la documentación integrada resuelven las observaciones que sustentaban el dictamen anterior. Esta conclusión documental no constituye una calificación oficial de la cátedra ni una certificación de seguridad o aptitud productiva.
+
+### 14.8. Limitaciones conservadas y alcance de este cierre
+
+- La instalación reutilizó la caché de pnpm; no se probó la descarga completa en un equipo sin caché.
+- No se reconstruyeron todas las imágenes completas de aplicación. La ejecución integral comprobada fue React/Vite y Express locales con PostgreSQL en Docker.
+- No se realizaron nuevas conexiones ni verificaciones en Supabase. Su evidencia histórica conserva su fuente y alcance originales.
+- No existe un despliegue público completo de la aplicación; una base remota operativa no lo acredita.
+- Los endpoints carecen de autenticación y autorización funcional de usuarios. La demostración utilizó exclusivamente datos ficticios.
+- No se midió cobertura; 437 casos únicos no equivalen a un porcentaje de cobertura.
+- No se realizó una auditoría completa de seguridad ni de todas las dependencias.
+- No se presume una nueva revisión manual de accesibilidad ni conformidad completa con una norma.
+- La preparación teórica individual y la evaluación docente quedan fuera del análisis práctico.
+- La detención de PostgreSQL y la conservación de su volumen están acreditadas; falta comprobación final de detención de Express y Vite.
+
+Estas limitaciones se informan sin convertirlas automáticamente en incumplimientos que la consigna no exige. Se conservan los siete elementos NO OBLIGATORIO de la sección 8.
+
+**Cierre de esta edición:** se modifica únicamente `docs/CHECKLIST.md`, con la nota de lectura vigente y esta sección posterior; las secciones 1–13 conservan su contenido histórico. No se repitieron pruebas ni instalaciones, no se accedió a secretos privados o Supabase y no se alteraron código, configuraciones, dependencias, ramas ni staging. La nueva actualización queda para revisión e integración manuales por el usuario, sin operaciones Git de escritura de Codex.
