@@ -1,5 +1,7 @@
 # Decisiones de diseño
 
+Las secciones 1–6 conservan el análisis del prototipo anterior a la persistencia. La sección 7 registra D01–D04 y su evolución: P04 está técnicamente completada, con P04.4b validada y aprobada el 18/11/2026. Los antecedentes históricos no describen pendientes actuales de ese incremento.
+
 ## 1. Separación entre las vistas y el acceso a la API
 
 ### Código analizado
@@ -291,13 +293,13 @@ El costo de esta verificación es necesitar Docker/Buildx/tar y tiempo de constr
 
 **Fecha:** 15 de noviembre de 2026. **Fuente:** aprobación expresa de Homero en la revisión supervisada de D01–D04.
 
-Este apartado registra acuerdos para una implementación futura. Los apartados 1–6 conservan los antecedentes y el estado del prototipo refactorizado; el código todavía utiliza memoria. No se instalaron dependencias, ejecutaron migraciones ni verificaron conexiones PostgreSQL/Supabase en esta actualización. Registrar decisiones no completa P01–P04 ni autoriza comenzar su ejecución.
+Este apartado conserva los acuerdos originales del 15/11/2026. Los apartados 1–6 y las condiciones iniciales documentan los antecedentes del prototipo que entonces utilizaba memoria. Esa actualización inicial no instaló dependencias ni verificó PostgreSQL/Supabase. El estado posterior se distingue en las continuaciones: P04 está técnicamente completada y P04.4b fue aprobada el 18/11/2026; P01/P02 conservan su revisión formal pendiente.
 
 ### D01 — Alcance aprobado
 
 El primer incremento persistirá localmente las consultas existentes, conservando frontend, backend y endpoints. Comprende PostgreSQL con Docker, adaptación asíncrona, migraciones y pruebas. Quedan fuera cuentas, clientes registrados, representantes, casos, mensajes y Caddy.
 
-P04 tiene dos hitos: persistencia local y posterior validación real contra PostgreSQL de Supabase. El hito remoto permanece pendiente hasta ejecutarse; el éxito local no acredita Supabase ni completa toda P04. No se requiere resolver funcionalidades futuras para trabajar en el hito local.
+P04 se dividió en dos hitos: persistencia local y posterior validación real contra PostgreSQL de Supabase. Ambos están acreditados al 18/11/2026; el cierre se apoya en evidencias separadas, no en extrapolar el éxito local a Supabase. Las funcionalidades futuras no formaron parte del incremento.
 
 ### D02 — Modelo y comportamiento aprobados
 
@@ -332,46 +334,57 @@ Se aprueba rechazar con HTTP 400 los textos con NUL o Unicode mal formado antes 
 
 El DER de seis entidades en [discusion-tecnica.md](discusion-tecnica.md) se conserva como **propuesta conceptual futura no aprobada**. Sus cardinalidades, perfiles, claves y reglas de acceso no se trasladan al esquema inicial.
 
-### D03 — Selección provisional y condiciones pendientes
+### D03 — Selección y condiciones técnicas verificadas
 
-Se aprueban provisionalmente Sequelize 6, controlador `pg` y migraciones versionadas con Umzug, con organización mínima de conexión, modelo y acceso a datos. No se agregan capas de delegación ni patrones sin una necesidad concreta.
+La selección inicial de Sequelize 6, controlador `pg` y migraciones versionadas con Umzug se aprobó condicionada a verificar compatibilidad y permisos. P04.2 incorporó Sequelize 6.37.8, `pg` 8.23.1 y Umzug 3.8.3; P04.4b acreditó su uso real contra Supabase de desarrollo. Se conserva una organización mínima de conexión, modelo y acceso a datos, sin capas de delegación ni patrones innecesarios.
 
-Antes de instalar deben verificarse y registrarse:
+Las condiciones previas a instalar quedaron verificadas en P04.2 y registradas en la [guía de persistencia](../backend/database/README.md):
 
 - Compatibilidad real con Node.js, TypeScript, ESM y pnpm del proyecto, versiones exactas y forma de cargar las migraciones. Distinguir soporte declarado de comprobaciones efectivamente ejecutadas.
 - Necesidad de `pg-hstore` para la versión y los tipos utilizados: no se presume ni su inclusión ni su ausencia.
 - Esquema del historial de Umzug y privilegios, incluida la preparación del esquema antes de inicializar el historial.
 
-**Propuesta técnica pendiente de validación:** tabla de historial `app."SequelizeMeta"`, separada de las entidades de negocio.
+**Historial validado localmente y en Supabase:** `app."SequelizeMeta"`, separado de las entidades de negocio.
 
-| Rol técnico propuesto | Privilegios a validar |
+| Rol técnico | Privilegios del incremento |
 | --- | --- |
 | Migrador | Preparar y usar el esquema `app` (`CREATE`/`USAGE`), aplicar DDL sobre los objetos del incremento y mantener el historial con `SELECT`/`INSERT`/`DELETE` y permisos de creación. |
 | Aplicación | `USAGE` del esquema, `SELECT`/`INSERT` sobre `app.consultas` y permisos necesarios sobre su secuencia; sin DDL ni permisos sobre el historial. |
 
-La aprobación provisional no acredita estas verificaciones ni habilita instalaciones ahora. Las pruebas de compilación, carga de migraciones y acceso real deberán aportar evidencia cuando se autorice su ejecución. Se prohíben `sync({ force: true })` y `sync({ alter: true })` como sustitutos de migraciones.
+La compatibilidad con Node/TypeScript/ESM/pnpm, la carga de migraciones y el acceso real se comprobaron durante los incrementos autorizados. `pg-hstore` no es necesario para los tipos INTEGER/TEXT del modelo. La aprobación de P04 no exime de revisar compatibilidad si cambian versiones o tipos. Se prohíben `sync({ force: true })` y `sync({ alter: true })` como sustitutos de migraciones.
 
 La memoria se conserva para pruebas aisladas; no es un fallback ante fallos PostgreSQL. Los errores de conexión o persistencia deben tratarse explícitamente y sin revelar credenciales.
 
-### D04 — Entornos aprobados y validaciones pendientes
+### D04 — Entornos aprobados y validaciones realizadas
 
 Se aprueba PostgreSQL local mediante Docker, con desarrollo y pruebas separados. La infraestructura debe ser reproducible, sencilla y sin scripts innecesarios. No se utilizarán datos personales reales ni credenciales compartidas para pruebas.
 
-Quedan pendientes verificar la imagen y versión concreta, volúmenes, configuración, credenciales propias, permisos, conexión, inicialización y limpieza protegida de recursos descartables. Una configuración ausente o un destino no autorizado deben impedir pruebas destructivas; nunca se limpiarán bases existentes, compartidas o reales para acelerar el desarrollo.
+P03 verificó PostgreSQL 17.12 fijado por digest, volúmenes, credenciales propias, permisos, conexión, inicialización y limpieza protegida de recursos descartables. P04.4a conservó estas protecciones y su regresión local fue aprobada. Una configuración ausente o un destino no autorizado deben impedir pruebas destructivas; nunca se limpiarán bases existentes, compartidas o reales para acelerar el desarrollo.
 
-La configuración y las migraciones deben permitir una conexión posterior con Supabase. Proyecto, conectividad, modo directo o agrupado y TLS se resolverán y comprobarán en ese hito; no se presupone que cambiar una URL demuestre compatibilidad.
+P04.4b verificó la configuración y la migración existentes contra PostgreSQL 17.12 en un proyecto Supabase exclusivo de desarrollo, mediante Session pooler/5432 y TLS con CA y nombre del servidor verificados. Data API desactivada y SSL obligatorio. La conexión directa permanece soportada por la configuración, pero no se presenta como validada en ese proyecto. La evidencia no habilita otros proyectos ni operaciones remotas futuras sin autorización.
 
 De D06 solo se consideran ahora los privilegios técnicos y la exposición de datos del entorno controlado. La autorización funcional de clientes sigue pendiente. Persistencia no autoriza despliegue público ni uso con información personal real.
 
-Los pendientes se evaluarán mediante los criterios de [planificación.md](planificación.md). Homero conserva P01–P04 y P13; Martín mantiene P11/P12. Las asignaciones del equipo continúan siendo propuestas y cada tarea requiere evidencia para su cierre.
+Los estados se evalúan mediante los criterios de [planificación.md](planificación.md). El cierre técnico de P04 no completa P01/P02, que se revisarán formalmente por separado, ni P12/P13. Homero conserva P01–P04 y P13; Martín mantiene P11/P12. Las asignaciones del equipo continúan siendo propuestas y cada tarea requiere evidencia para su cierre.
 
 ### Continuación D03/D04 — Preparación local P04.4a (16/11/2026)
 
-El registro anterior conserva el estado al aprobar D01–D04. Posteriormente se aprobaron P04.1–P04.3: el arranque normal utiliza PostgreSQL local con Sequelize y migraciones Umzug explícitas. P04.4a incorpora únicamente preparación local para un futuro proyecto Supabase de desarrollo; no acredita conectividad ni permisos remotos y no completa P04.
+Este antecedente registra la preparación de P04.4a. Ya se habían aprobado P04.1–P04.3: arranque con PostgreSQL local, Sequelize y migraciones Umzug explícitas. P04.4a incorporó únicamente perfiles y TLS; por sí sola no acreditó conectividad ni permisos remotos. Su regresión local posterior fue satisfactoria; la validación real y el cierre técnico se registran a continuación.
 
 - Se conserva `app.consultas`, el modelo, la migración aprobada y `app."SequelizeMeta"`, sin nuevas dependencias ni cambios HTTP. Se selecciona `POSTGRES_TARGET=local|supabase-dev`; la ausencia de selector conserva solo los valores locales compatibles. Perfiles mezclados, incompletos o no reconocidos fallan sin fallback.
 - Se admiten conexión directa y session pooler/5432. Los roles SQL siguen siendo `docker_laws_app` y `docker_laws_migrator`; el usuario de transporte del pooler agrega la referencia del proyecto. No se habilita usuario administrador ni selección libre de credenciales.
 - TLS remoto exige CA PEM vigente, validación de cadena y nombre del servidor; no existe un modo remoto sin verificación. Las otras tres variables nuevas son modo de conexión, referencia del proyecto y ruta de CA. Se reutilizan host, puerto, base y directorio de secretos; el pool máximo de dos conexiones no cambia. Detalle en la [guía de persistencia](../backend/database/README.md).
 - Las futuras migraciones remotas requieren `up --supabase-project REF` coincidente con el perfil privado. `status` remoto se bloquea porque Umzug puede inicializar el historial. Express no migra al arrancar. Las pruebas y limpiezas Docker siguen siendo exclusivamente locales, con variables remotas eliminadas y comprobación del destino antes del DDL.
 
-**Pendiente para P04.4b:** autorizar proyecto nuevo y referencia concreta; comprobar IPv6/directo o IPv4/session, certificado aplicable, roles/permisos administrados y esquema `app` fuera de Data API; aprobar el procedimiento remoto de preparación antes de escribir. El inicializador local no se ejecutará en Supabase. Conexión, migración, historial, permisos, API y persistencia deberán verificarse realmente con datos ficticios, sin limpiezas remotas. El DER futuro continúa siendo una hipótesis conceptual no aprobada y no se autoriza uso público ni datos personales reales.
+**Condiciones previstas para P04.4b al cerrar P04.4a:** proyecto de desarrollo autorizado, conectividad y certificado del modo elegido, roles/permisos y exposición de la Data API revisados antes de escribir. La validación informada abajo acredita el hito real mediante Session pooler. El inicializador y las limpiezas locales siguen excluidos de Supabase. El DER futuro continúa siendo una hipótesis conceptual no aprobada y no se autoriza uso público ni datos personales reales.
+
+### Validación P04.4b y cierre técnico de P04 — 18/11/2026
+
+**Fuente:** evidencia de ejecución y aprobación formal aportadas por Homero. Esta actualización documental no abrió conexiones, ejecutó migraciones ni repitió las pruebas remotas.
+
+- Proyecto Supabase exclusivo de desarrollo con PostgreSQL 17.12, Data API desactivada y SSL obligatorio. Conexión real mediante Session pooler/5432 y TLS verificado; autenticación independiente de `docker_laws_app` y `docker_laws_migrator`.
+- Esquema `app` propiedad del migrador. Migración `001-crear-consultas` aplicada correctamente con Umzug; tabla, secuencia, propietarios e historial comprobados. La aplicación tiene permisos restringidos, sin UPDATE, DELETE, CREATE ni acceso al historial, según la verificación del usuario.
+- Base inicialmente vacía y GET `/formulario` vacío. React y Express locales permitieron enviar un formulario ficticio; su registro con ID 1 se verificó mediante HTTP y SQL Editor. Los datos permanecieron después de detener y reiniciar únicamente el backend, sin recrear la base.
+- P04 se considera técnicamente completada combinando la regresión automatizada local y esta validación remota real. Las comprobaciones locales de concurrencia, idempotencia, caracteres inválidos y fallos no se presentan como reejecutadas en Supabase. No se registra una segunda ejecución remota de la migración ni pruebas destructivas no informadas.
+
+**Límites:** la base remota es operativa para el prototipo de desarrollo; frontend y backend no fueron desplegados públicamente. Los roles técnicos PostgreSQL no implementan autenticación ni autorización de clientes. Siguen pendientes esas funciones y las decisiones de despliegue/proxy/HTTPS de la aplicación. TLS entre backend y base no acredita HTTPS del sitio. Se mantienen datos ficticios, secretos privados fuera de Git, ejecución explícita de migraciones con confirmación del proyecto y prohibición de usar pruebas/limpiezas locales contra Supabase. P01 y P02 permanecen pendientes de revisión formal.

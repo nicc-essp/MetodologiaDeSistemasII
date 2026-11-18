@@ -4,7 +4,9 @@
 
 **Actualización de decisiones:** 15 de noviembre de 2026.
 
-**Estado:** estructura y distribución preliminar aprobadas por Homero; asignaciones pendientes de aceptación por los integrantes. D01–D04 registradas con los acuerdos y condiciones de la sección 4. P03 completada y aprobada formalmente por Homero el 15 de noviembre de 2026; las demás tareas conservan sus pendientes.
+**Actualización de seguimiento:** 18 de noviembre de 2026: cierre técnico de P04 y aprobación de P04.4b.
+
+**Estado:** estructura y distribución preliminar aprobadas por Homero; asignaciones pendientes de aceptación por los integrantes. D01–D04 registradas con los acuerdos y verificaciones de la sección 4. P03 completada y aprobada formalmente por Homero el 15 de noviembre de 2026; P04 técnicamente completada tras la validación y aprobación de P04.4b del 18 de noviembre de 2026. P01 y P02 siguen pendientes de revisión formal por separado; no se cierran las demás tareas.
 
 **Alcance:** planificación técnica. Este documento no autoriza implementación, instalaciones, despliegues ni operaciones de escritura de Git.
 
@@ -12,13 +14,13 @@
 
 Preparar una evolución gradual del prototipo de Taller II, conservando sus comportamientos comprobados y permitiendo distribuir entregables entre cuatro integrantes.
 
-- Preparar como primer incremento la persistencia local de las consultas existentes mediante PostgreSQL, Sequelize 6, `pg` y migraciones Umzug, sujetos a las condiciones registradas. La validación real en Supabase será un hito posterior de P04.
+- Incorporar como primer incremento la persistencia de las consultas existentes mediante PostgreSQL, Sequelize 6, `pg` y migraciones Umzug. Los hitos local y Supabase de desarrollo de P04 están técnicamente completados, con evidencias separadas en la sección 8.
 - Preparar cuentas, seguimiento de casos y comunicación como funcionalidades previstas, sujetas a definición y aprobación.
 - Evaluar Caddy para proxy inverso y HTTPS en un entorno acordado.
 - Conservar separación de responsabilidades, validación, accesibilidad, contratos y pruebas durante cada incremento.
 - Facilitar la actualización del plan cuando se reciban las consignas oficiales del Taller III.
 
-**El alcance local de P01–P04 está aprobado, con condiciones técnicas pendientes.** Los acuerdos se registran en [Decisiones aprobadas para el primer incremento de persistencia](decisiones-diseno.md#7-decisiones-aprobadas-para-el-primer-incremento-de-persistencia). Su ejecución incremental requiere autorización en modo SUPERVISADO y cumplimiento de las condiciones del hito correspondiente. No se incluyen cuentas, casos, representantes, mensajes ni Caddy en este incremento; tampoco requisitos académicos supuestos o fechas no acordadas.
+**El alcance de persistencia está aprobado y P04 está técnicamente completada; P01/P02 conservan su revisión formal pendiente.** Los acuerdos se registran en [Decisiones aprobadas para el primer incremento de persistencia](decisiones-diseno.md#7-decisiones-aprobadas-para-el-primer-incremento-de-persistencia). Toda nueva ejecución requiere autorización en modo SUPERVISADO. No se incluyen cuentas, casos, representantes, mensajes ni Caddy en este incremento; tampoco requisitos académicos supuestos o fechas no acordadas.
 
 ## 2. Estado actual de Docker-laws
 
@@ -28,27 +30,27 @@ La referencia es el código inspeccionado, el [README](../README.md) y las [deci
 | --- | --- |
 | Interfaz | React, Vite y JavaScript; inicio, formulario y consultas recibidas en `frontend/src/App.jsx` y `frontend/src/pages/`. No existe una vista específica de detalle individual. |
 | API | Express y TypeScript: `POST /formulario`, `GET /formulario`, `GET /formulario/:id` y `GET /health`, definidos en `backend/routes/` y `backend/app.ts`. |
-| Datos | Siete campos de texto y un `id` numérico, definidos en `backend/models/formulario.ts`. Memoria privada por instancia en `backend/data/formularios-guardados.ts`; los datos nuevos se pierden al reiniciar. |
-| Responsabilidades | Aplicación separada del arranque; controlador, validación pura, almacenamiento y middleware de errores en módulos distintos. El almacén y sus consumidores actuales son síncronos. |
+| Datos | `app.consultas` conserva los siete textos y un `id` numérico generado por PostgreSQL. Modelo Sequelize y migración Umzug en `backend/models/consulta.model.ts` y `backend/migrations/`; acceso en `backend/data/formularios-postgres.ts`. Persistencia comprobada localmente y en Supabase de desarrollo. Memoria por instancia solo para pruebas aisladas, sin fallback. |
+| Responsabilidades | Aplicación separada del arranque; controlador, validación pura, almacenamiento y middleware de errores en módulos distintos. Contrato asíncrono de creación, listado y búsqueda, con inyección de dependencias. |
 | Comunicación HTTP | `frontend/src/services/formularioService.js` centraliza operaciones y controla respuestas y mensajes. La interfaz distingue carga, éxito y error y conserva campos ante fallos. |
 | Configuración | `VITE_API_BASE_URL` y `CORS_ORIGINS` configurables. CORS limita lectura desde el navegador; no autentica ni autoriza. |
 | Calidad | Pruebas backend con `node:test`, pruebas frontend con Vitest y Testing Library, comprobación TypeScript, lint frontend y build. Scripts en los manifiestos de cada componente. |
-| Contenedores | Compose ejecuta frontend y backend, y PostgreSQL 17.12 mediante el perfil optativo `persistencia`. Desarrollo usa un volumen nombrado; las pruebas tienen Compose, credenciales y almacenamiento independientes. Las imágenes de aplicación son de desarrollo; el frontend inicia Vite. Hay exclusiones y verificaciones Docker con fixtures sintéticos en `scripts/`. |
+| Contenedores | Compose ejecuta frontend, backend y PostgreSQL 17.12 local, sin activar un perfil adicional. Desarrollo usa un volumen nombrado; las pruebas tienen Compose, credenciales y almacenamiento independientes. Las imágenes de aplicación son de desarrollo; el frontend inicia Vite. Hay exclusiones y verificaciones Docker con fixtures sintéticos en `scripts/`. La validación Supabase utilizó React y Express locales, no un despliegue público. |
 
 **La aplicación actual no dispone de autenticación ni autorización para acceder a las consultas.** El listado y el detalle se encuentran accesibles sin comprobar identidad o pertenencia. El uso del prototipo debe permanecer limitado a datos ficticios en un entorno controlado.
 
-No están implementados Supabase, Sequelize, cuentas, casos, comunicación ni Caddy. `backend/migrations/` y `backend/seeders/` contienen únicamente archivos de reserva; no acreditan persistencia.
+Sequelize, las migraciones y el acceso PostgreSQL local/Supabase de desarrollo están implementados y verificados para consultas. Cuentas, autorización funcional, casos, comunicación y Caddy siguen pendientes. Una base remota operativa no publica la aplicación ni habilita datos personales reales.
 
 La revisión manual del prototipo refactorizado fue completada satisfactoriamente por el usuario con Chrome y Narrador en Windows 10, después de las correcciones de CORS y de la CLI Docker. El README y las decisiones de diseño reflejan esa evidencia humana, diferenciada de las pruebas automatizadas existentes. La regresión automatizada de P03 se registra en la sección 8; no se repitió la revisión manual de accesibilidad. Las pantallas o funcionalidades nuevas y los cambios en los flujos afectados requerirán sus propias revisiones.
 
 ## 3. Tecnologías y funcionalidades previstas
 
-Estas previsiones provienen de Taller II y del contexto aportado por el equipo; **no son requisitos oficiales definitivos del Taller III**.
+Estas tecnologías y previsiones provienen de Taller II y del contexto aportado por el equipo; **no son requisitos oficiales definitivos del Taller III**. Las filas de persistencia distinguen lo ya validado en P04 de las funcionalidades futuras.
 
 | Previsión | Encaje técnico propuesto | Límite pendiente |
 | --- | --- | --- |
-| Supabase PostgreSQL | Hito posterior de validación real de P04, después de la persistencia local. | Proyecto, acceso de red, credenciales, permisos, modo de conexión y TLS pendientes. Sin ejecución remota no se acredita ese hito. |
-| Sequelize 6, `pg` y Umzug | Selección provisional aprobada para acceso a PostgreSQL y migraciones versionadas desde el backend. | Versiones exactas, compatibilidad con Node, TypeScript, ESM y pnpm, necesidad de `pg-hstore` e historial/permisos por validar antes de instalar. |
+| Supabase PostgreSQL | Validado en P04.4b sobre un proyecto exclusivo de desarrollo: PostgreSQL 17.12, Session pooler/5432 y TLS verificado. | Data API desactivada y SSL obligatorio; no acredita despliegue público, acceso de clientes ni otros proyectos. Nuevas operaciones requieren autorización. |
+| Sequelize 6, `pg` y Umzug | Sequelize 6.37.8, `pg` 8.23.1 y Umzug 3.8.3 incorporados, con migración e historial verificados. | Compatibilidad Node/TypeScript/ESM/pnpm comprobada en P04.2; `pg-hstore` no requerido para INTEGER/TEXT. Revisar al cambiar versiones o tipos. |
 | Caddy | Entrada HTTP(S), proxy y, según el entorno, servicio de archivos construidos del frontend. | Entorno objetivo, rutas, dominio, certificados y separación entre desarrollo y una eventual entrega desplegable. |
 | Cuentas de clientes | Identidad y acceso a información propia según reglas aprobadas. | Flujos de cuenta, sesiones, estrategia de autenticación y permisos. |
 | Seguimiento de casos | Representación y consulta de casos jurídicos. | Relación con consultas, responsables, estados y operaciones permitidas. |
@@ -56,7 +58,7 @@ Estas previsiones provienen de Taller II y del contexto aportado por el equipo; 
 
 La propuesta mantiene React → API Express → Sequelize → PostgreSQL, sin agregar un segundo camino de datos desde el navegador por defecto. Supabase Auth es una alternativa por evaluar, no una consecuencia automática de elegir su base de datos. Tampoco se presuponen chat en tiempo real, adjuntos, notificaciones o integraciones externas.
 
-La integración de persistencia debe adaptar explícitamente el contrato asíncrono y los errores de acceso a datos. Una frontera pequeña de acceso puede justificarse por las pruebas y los adaptadores; no se propone un Repository genérico, contenedor de dependencias ni capa que solo delegue.
+La integración de persistencia adaptó el contrato asíncrono y los errores de acceso a datos con una frontera pequeña para memoria y PostgreSQL. No se agregó un Repository genérico, contenedor de dependencias ni capa que solo delegue.
 
 ## 4. Decisiones técnicas y estado
 
@@ -64,32 +66,32 @@ Homero coordina y tiene autoridad técnica sobre arquitectura, datos y contratos
 
 | ID | Decisión | Estado, condiciones y coordinación |
 | --- | --- | --- |
-| D01 | Primer incremento de persistencia local; Supabase como hito posterior de P04. | Alcance aprobado por Homero. P03 completada; P04 pendiente y requiere autorización para comenzar. Las consignas oficiales y la aceptación de asignaciones por el equipo siguen pendientes. |
+| D01 | Primer incremento de persistencia local; Supabase como segundo hito de P04. | Alcance aprobado por Homero. P03 y ambos hitos técnicos de P04 completados; P04.4b aprobada el 18/11/2026. P01/P02 pendientes de revisión formal; consignas oficiales y aceptación de asignaciones por el equipo también pendientes. |
 | D02 | `app.consultas`, siete textos e ID numérico generado; contacto histórico, base inicialmente vacía y DER mínimo evaluado hasta 3FN. | Aprobada. Rechazo HTTP 400 de NUL/Unicode mal formado con regresiones obligatorias; los demás comportamientos válidos se conservan. Homero revisará la evidencia de P02; entidades y relaciones futuras no aprobadas. |
-| D03 | Sequelize 6, controlador `pg` y migraciones versionadas con Umzug; arquitectura mínima. | Aprobación provisional. Homero debe verificar compatibilidad real, versiones y necesidad de `pg-hstore`, y validar esquema/permisos del historial antes de instalar. Propuesta pendiente: `app."SequelizeMeta"`. Prohibidos `sync({ force: true })` y `sync({ alter: true })`. |
-| D04 | PostgreSQL local con Docker, desarrollo y pruebas separados y configuración adaptable a Supabase. | Entorno local verificado y aprobado en P03: PostgreSQL 17.12, volúmenes separados, credenciales propias, roles/permisos y limpieza protegida. La integración funcional de P04 y Supabase, su conexión y TLS quedan pendientes; Martín conserva P11/P12. Sin datos personales reales ni credenciales compartidas para pruebas. |
+| D03 | Sequelize 6, controlador `pg` y migraciones versionadas con Umzug; arquitectura mínima. | Condiciones técnicas verificadas en P04: versiones compatibles, INTEGER/TEXT sin `pg-hstore`, `app."SequelizeMeta"` y separación de permisos. Migración local y remota comprobadas. Prohibidos `sync({ force: true })` y `sync({ alter: true })`. |
+| D04 | PostgreSQL local con Docker, desarrollo/pruebas separados y perfil Supabase de desarrollo. | P03 verificada y P04.4b validada: PostgreSQL 17.12, Session pooler/5432, TLS verificado, Data API desactivada, SSL obligatorio y roles separados. Compose/pruebas/limpieza siguen siendo locales; Martín conserva P11/P12. Sin datos personales reales ni despliegue público. |
 | D05 | Proveedor de identidad, flujos de cuenta y manejo de sesiones. | Antes de P05/P06; Homero y Matías, con Nicolás para el contrato del navegador. No implementar criptografía propia. |
 | D06 | Quién puede crear, listar y ver consultas; relación entre identidad y datos; controles del servidor y eventual protección en PostgreSQL. | Antes de P05 y de cualquier uso real; Homero y equipo. Los cambios de acceso a rutas existentes requieren aprobación explícita. |
 | D07 | Diferencia entre consulta y caso, relaciones con clientes y representantes, estados y acciones válidas. | Antes de P07/P08; Homero, Matías y Nicolás. Enviar una consulta no debe asumirse equivalente a abrir un expediente. |
 | D08 | Canal de comunicación, participantes, persistencia y dependencia respecto de los casos. | Antes de P09/P10; Homero, Matías y Nicolás. |
 | D09 | Entorno de Caddy, dominio o nombre local, rutas y posibles prefijos, certificados, configuración del frontend y política CORS. | Antes de P11; Homero y Martín, con Nicolás. No constituye autorización para desplegar. |
 
-El registro de D01–D04 por sí solo no acredita implementación. P03 se cierra por su evidencia técnica y aprobación expresa; no completa P01, P02 ni P04. Antes de instalar deben resolverse las comprobaciones de D03 y la propuesta de historial/permisos detallada en decisiones de diseño. D05–D09 continúan pendientes; de D06 solo se consideran ahora credenciales, privilegios de base y exposición de datos del entorno controlado. Antes de conectar Supabase se revisarán sus esquemas expuestos y permisos, sin presumir autorización por usuario desde una conexión compartida del backend.
+El registro de acuerdos por sí solo no acredita implementación: los cierres técnicos de P03 y P04 se basan en las evidencias de la sección 8. No completan P01/P02 ni P12/P13. D05–D09 continúan pendientes; de D06 solo se resolvieron credenciales, privilegios técnicos de base y exposición del entorno controlado. Los roles de aplicación/migrador no autentican clientes ni autorizan acceso a sus consultas.
 
-Referencias técnicas para revisar al resolver decisiones: [conexiones de Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres), [seguridad por filas](https://supabase.com/docs/guides/database/postgres/row-level-security), [migraciones Sequelize](https://sequelize.org/docs/v6/other-topics/migrations/) —familia v6 aprobada provisionalmente; versión exacta pendiente— y [HTTPS de Caddy](https://caddyserver.com/docs/automatic-https). El modo de conexión y la confianza de certificados deben comprobarse en el entorno elegido.
+Referencias técnicas: [conexiones de Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres), [seguridad por filas](https://supabase.com/docs/guides/database/postgres/row-level-security), [migraciones Sequelize](https://sequelize.org/docs/v6/other-topics/migrations/) y [HTTPS de Caddy](https://caddyserver.com/docs/automatic-https). La validación de P04 corresponde al entorno de desarrollo comprobado; no se extiende automáticamente a otro modo de conexión, proyecto o despliegue.
 
 ## 5. Fases de desarrollo
 
 | Fase | Tareas | Resultado y condición de avance |
 | --- | --- | --- |
 | 1. Delimitación y contratos | P01–P02 | Decisiones mínimas y contrato del incremento aprobados; funcionalidades futuras identificadas como pendientes. |
-| 2. Persistencia de consultas | P03–P04 | P03 completada: entorno PostgreSQL local aislado. P04 pendiente: persistencia funcional de consultas y, después, validación real contra Supabase. El cierre de P03 no completa P04. |
+| 2. Persistencia de consultas | P03–P04 | Completadas técnicamente: entorno local aislado, persistencia funcional de consultas y validación real contra Supabase de desarrollo. P01/P02 conservan su revisión formal independiente. |
 | 3. Cuentas y permisos | P05–P06 | Identidad y acceso comprobados según D05/D06. Requiere autorización específica de alcance. |
 | 4. Seguimiento de casos | P07–P08 | Operaciones y vistas de casos según D07 aprobada. |
 | 5. Comunicación | P09–P10 | Canal y permisos aprobados, con integración cliente/representante. |
 | 6. Infraestructura e integración | P11–P13 | Proxy del entorno acordado, evidencias conjuntas y documentación. P11 puede adelantarse en paralelo tras D09. |
 
-P12 y P13 conservan las dependencias de la sección 7. Las verificaciones propias del hito local se registrarán en P04; no completan P04 ni adelantan el cierre de P12/P13 mientras falte la validación Supabase. Ningún hito aprueba funcionalidades futuras. Si una consigna cambia el alcance, se actualizan las tareas afectadas antes de ejecutarlas.
+P12 y P13 conservan las dependencias de la sección 7 y no se cierran por completar P04. Ambos hitos de persistencia tienen evidencia separada en la sección 8. Ningún hito aprueba funcionalidades futuras. Si una consigna cambia el alcance, se actualizan las tareas afectadas antes de ejecutarlas.
 
 ## 6. Distribución por integrante
 
@@ -124,7 +126,7 @@ P03 corresponde exclusivamente a Homero, quien podrá ejecutar P01–P04, cuando
 | P01 | Alcance autorizado, riesgos, decisiones y matriz de compatibilidad de herramientas; documentación compartida. | Homero | Sin tareas previas; requiere acuerdo sobre el incremento. |
 | P02 | Modelo mínimo, contrato de consultas y criterios para extender modelos, permisos y API por módulo. `backend/models/`, rutas y servicios frontend como referencia. | Homero | P01. Cerrar primero consultas; los contratos futuros requieren aprobación antes de sus módulos. |
 | P03 | **Completada y aprobada el 15/11/2026.** Entorno PostgreSQL local, base de pruebas aislada, fixtures y limpieza segura; instrucciones reproducibles en README. | Homero | P01 y decisiones D03/D04 aplicables. No requiere implementar P04; su cierre no acredita las demás tareas. |
-| P04 | Persistencia de consultas con Sequelize, migraciones, adaptación asíncrona y ciclo de conexión: hito local primero y validación Supabase posterior. Mismas áreas previstas: configuración, datos, modelos, migraciones, controlador, router, app, arranque, pruebas y manifiesto. | Homero | P02, P03 y condiciones de D02–D04 resueltas para el hito correspondiente. El cierre exige ambos hitos verificados. |
+| P04 | **Técnicamente completada el 18/11/2026.** Persistencia de consultas con Sequelize, migraciones, adaptación asíncrona y ciclo de conexión; hitos local y Supabase de desarrollo verificados. Áreas: configuración, datos, modelos, migraciones, controlador, router, app, arranque, pruebas y manifiesto. | Homero | P02, P03 y condiciones de D02–D04 para cada hito. Ambos hitos acreditados; el cierre técnico no completa la revisión formal pendiente de P01/P02. |
 | P05 | Cuentas y autorización en API, con pruebas de identidad y pertenencia. Módulos backend nuevos y migraciones correspondientes. | Matías | P04, D05/D06 y contrato de cuentas aprobado. |
 | P06 | Interfaz de cuentas y sesión; páginas, servicios y navegación frontend. | Nicolás | Puede iniciar con contrato de cuentas aprobado en P02 y D05/D06; cerrar requiere P05 integrado. |
 | P07 | Backend de seguimiento de casos, relaciones y operaciones autorizadas. | Matías | P05, D07 y contrato de casos aprobado. |
@@ -181,7 +183,17 @@ Cada entrega debe registrar versión o revisión evaluada, entorno, procedimient
 
 **Límite histórico del cierre de P03:** preparó infraestructura y el esquema vacío `app`; en ese momento no había tablas de negocio, Sequelize, migraciones ejecutables ni persistencia funcional de formularios. El cierre no acreditó P04.
 
-**Avance posterior de P04:** P04.1 (contrato asíncrono), P04.2 (Sequelize/Umzug) y P04.3 (API con PostgreSQL local) fueron aprobadas por Homero. P04.4a prepara localmente la selección `local`/`supabase-dev`, roles de transporte, TLS verificado y confirmación del proyecto para futuras migraciones, sin conexiones ni operaciones remotas. Conserva el aislamiento y la limpieza protegida de P03. Procedimiento, variables y evidencia en la [guía de persistencia](../backend/database/README.md). P04.4a queda sujeta a revisión; P04.4b y el cierre de P04 siguen pendientes. No se marcan nuevas tareas como completadas.
+**Cierre técnico de P04 — 18 de noviembre de 2026.** P04.1 (contrato asíncrono), P04.2 (Sequelize/Umzug), P04.3 (API local) y P04.4a (perfiles y TLS, con regresión PostgreSQL local posterior) fueron revisadas. Homero confirmó y aprobó formalmente P04.4b en esta fecha. La evidencia remota siguiente fue aportada por el usuario; Codex no abrió conexiones ni repitió operaciones durante esta actualización documental. La [guía de persistencia](../backend/database/README.md) conserva los procedimientos y la evidencia detallada.
+
+| Criterio de P04 | Evidencia y entorno |
+| --- | --- |
+| Contrato asíncrono; creación, listado y búsqueda por ID conservan rutas/JSON | Código y regresión local de P04.1/P04.3; 288 pruebas backend y typecheck aprobados en la revisión previa. |
+| Migración en base vacía, repetición sin duplicados y recuperación controlada | 8 pruebas/subpruebas de migraciones locales aprobadas, con ensayo de fallo y rollback exclusivamente descartable. En Supabase se confirmó la primera ejecución de `001-crear-consultas` y su historial; no se afirma una segunda ejecución remota. |
+| Concurrencia sin IDs duplicados, validación previa, fallos y errores sin secretos | 12 pruebas/subpruebas de API con PostgreSQL local aprobadas, más regresión backend. No se trasladan las pruebas negativas ni las limpiezas a Supabase. |
+| Aislamiento de destinos y conservación del entorno local | 17 pruebas de configuración/TLS y 33 de protección aprobadas. La regresión local `test:postgres --limpiar` pasó incluso con variables remotas ficticias en el proceso padre y conservó los recursos preexistentes. |
+| Validación real Supabase y persistencia | Evidencia de Homero: PostgreSQL 17.12 en proyecto exclusivo de desarrollo, Session pooler/5432 y TLS verificado; roles independientes, esquema `app` del migrador, objetos e historial verificados. GET inicialmente vacío, envío desde React de un formulario ficticio, ID 1 comprobado por HTTP/SQL Editor y permanencia tras detener y reiniciar únicamente Express local. |
+
+Los criterios quedan cubiertos por la regresión local y el hito remoto real, sin atribuir a Supabase pruebas locales ni comprobaciones remotas no informadas. **P04 está técnicamente completada.** Data API desactivada, SSL obligatorio y aplicación sin UPDATE, DELETE, CREATE ni acceso al historial, según la comprobación del usuario. La base comenzó vacía; el ID 1 corresponde a una demostración explícita, no a un seed automático. Una base remota operativa no es un despliegue público: React/Express permanecieron locales y siguen pendientes autenticación, autorización funcional y despliegue. P01/P02 y P12/P13 no se cierran.
 
 En P04 no se exigirá una secuencia de IDs sin huecos. El ID seguirá siendo numérico y generado por PostgreSQL. Se verificarán el contacto histórico, la base inicialmente vacía y los rechazos HTTP 400 de NUL/Unicode mal formado antes de insertar, sin registros añadidos ni alteración silenciosa de textos. Los demás comportamientos válidos se conservan. Los cambios intencionales de memoria volátil a persistencia requieren actualizar las pruebas afectadas, manteniendo el aislamiento unitario y el orden de listado acordado. No se añaden formatos nuevos de DNI o teléfono sin aprobación.
 
@@ -205,8 +217,8 @@ Las pruebas automáticas de accesibilidad no sustituyen una revisión con navega
 ## 9. Orden recomendado de implementación
 
 1. Revisar los acuerdos D01–D04 y autorizar la ejecución del incremento en modo SUPERVISADO. Completar en P01 las condiciones pendientes y evaluar P02 según sus criterios, sin darla por terminada por este registro.
-2. **P03 completada y aprobada:** Homero dispone del entorno local con aislamiento, fixtures y limpieza protegida, sin depender de otro integrante para prepararlo o verificarlo. Conservar esas protecciones al continuar; P02 y las condiciones pendientes de D03 deben evaluarse antes de P04.
-3. Homero ejecuta el hito local de P04 sobre ese entorno y registra persistencia, errores y regresión. La validación real con Supabase se realizará después; P04 conserva ese pendiente y P12/P13 mantienen sus dependencias.
+2. **P03 completada y aprobada:** Homero dispone del entorno local con aislamiento, fixtures y limpieza protegida, sin depender de la disponibilidad de otros integrantes. Conservar esas protecciones; la revisión formal de P01/P02 sigue pendiente.
+3. **P04 técnicamente completada:** se registraron por separado la regresión local y la validación real de Supabase aprobada el 18/11/2026. Revisar formalmente P01/P02 sin repetir ni ampliar operaciones remotas por este cierre. P12/P13 mantienen sus dependencias.
 4. Al aprobar D05/D06, Matías inicia P05 y Nicolás puede avanzar P06 contra su contrato. Integrar y comprobar identidad/permisos antes de continuar con datos de otros módulos.
 5. Con D07, Matías desarrolla P07 mientras Nicolás desarrolla P08 tras P06. Con D08 se repite la colaboración para P09/P10, respetando la dependencia de casos si se acordó.
 6. Martín puede desarrollar P11 en paralelo desde D09. Antes de cerrar P12, integrar la configuración con los módulos realmente incluidos.
@@ -258,16 +270,16 @@ Al recibir las consignas, Homero coordinará con el equipo una comparación entr
 
 ## 12. Checklist general de progreso
 
-Esta checklist evalúa tareas y verificaciones; registrar acuerdos no completa sus casillas. P03 se marca por su evidencia y aprobación formal del 15/11/2026, registradas en la sección 8. P01, P02 y P04 conservan sus pendientes; D01–D04 tienen los estados de la sección 4. No se ejecutaron pruebas ni implementación en esta actualización documental.
+Esta checklist evalúa tareas y verificaciones; registrar acuerdos no completa sus casillas. P03 se marca por su evidencia y aprobación formal del 15/11/2026; P04 y sus dos hitos, por la evidencia local previa y la aprobación de P04.4b del 18/11/2026, registradas en la sección 8. P01 y P02 conservan su revisión formal pendiente; D01–D04 tienen los estados de la sección 4. No se ejecutaron pruebas, implementación ni operaciones remotas en esta actualización documental.
 
 - [ ] Los cuatro integrantes aceptaron o ajustaron la distribución propuesta y su disponibilidad.
 - [ ] Se autorizó expresamente la ejecución del incremento P01–P04, además del registro de sus decisiones.
 - [ ] P01: alcance mínimo, riesgos y compatibilidad revisados.
 - [ ] P02: revisión del modelo y contrato aprobados completada con ejemplos y evidencia; futuras decisiones identificadas.
 - [x] P03 (Homero): entorno aislado reproducido y limpieza protegida comprobada; cierre aprobado por Homero el 15/11/2026, con evidencia en la sección 8.
-- [ ] P04: ambos hitos acreditados, con consultas persistentes, adaptación asíncrona y regresión verificadas.
-- [ ] Hito local de P04: flujo PostgreSQL real y regresión comprobados.
-- [ ] Hito Supabase de P04: validación remota ejecutada realmente; permanece pendiente.
+- [x] P04: técnicamente completada el 18/11/2026; ambos hitos acreditados, con adaptación asíncrona y regresión verificadas.
+- [x] Hito local de P04: flujo PostgreSQL real y regresión comprobados.
+- [x] Hito Supabase de P04: P04.4b validada realmente y aprobada por Homero el 18/11/2026, con evidencia aportada por el usuario.
 - [ ] Primera entrega P01–P04 revisada mediante P12/P13 para su alcance, sin cerrar funcionalidades futuras.
 - [ ] D05/D06 resueltas y alcance de cuentas/permisos autorizado.
 - [ ] P05: backend de cuentas y autorización integrado y probado.

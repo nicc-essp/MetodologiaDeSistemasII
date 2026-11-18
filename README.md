@@ -6,9 +6,9 @@ Aplicación web full stack desarrollada para el estudio jurídico ficticio **Doc
 
 El proyecto busca ofrecer información sobre los servicios del estudio y permitir que los clientes realicen consultas jurídicas desde la aplicación.
 
-Actualmente se encuentra implementado el flujo de formularios de consulta: un usuario puede completar y enviar una consulta desde el frontend, el backend la guarda en PostgreSQL local y las consultas recibidas pueden visualizarse desde otra sección de la aplicación.
+Actualmente se encuentra implementado el flujo de formularios de consulta: un usuario puede completar y enviar una consulta desde el frontend, el backend la guarda en PostgreSQL mediante Sequelize y las consultas recibidas pueden visualizarse desde otra sección de la aplicación. La persistencia está verificada tanto localmente como contra un proyecto Supabase exclusivo de desarrollo.
 
-El proyecto se encuentra en desarrollo. La validación de persistencia en Supabase, las cuentas de clientes y el seguimiento de casos forman parte de la evolución pendiente del sistema.
+El proyecto se encuentra en desarrollo. P04 está técnicamente completada y P04.4b fue validada y aprobada por Homero el 18 de noviembre de 2026. Las cuentas de clientes, la autorización funcional, el seguimiento de casos y el despliegue público continúan pendientes.
 
 ## Estado actual
 
@@ -26,7 +26,7 @@ Actualmente se encuentran implementadas:
 - Configuración de CORS para la comunicación entre frontend y backend.
 - Ejecución conjunta de frontend y backend mediante Docker Compose.
 
-El arranque normal utiliza **PostgreSQL local mediante Sequelize**, conserva los datos al reiniciar y comienza sin registros automáticos. El almacén en memoria permanece para pruebas aisladas; no se utiliza como fallback ante errores de la base. P04 continúa pendiente de revisión de sus incrementos y de la validación posterior con Supabase.
+El arranque normal utiliza **PostgreSQL mediante Sequelize**, conserva los datos al reiniciar y comienza sin registros automáticos. El destino predeterminado y Docker Compose siguen siendo locales; el perfil `supabase-dev` permite usar la base remota de desarrollo validada. El almacén en memoria permanece para pruebas aisladas; no se utiliza como fallback ante errores de la base. El cierre técnico de P04 no completa P01 ni P02, cuya revisión formal se realizará por separado.
 
 ## Stack tecnológico
 
@@ -34,7 +34,7 @@ El arranque normal utiliza **PostgreSQL local mediante Sequelize**, conserva los
 | --- | --- | --- |
 | Frontend | React + Vite | Interfaz de usuario |
 | Backend | Node.js + Express + TypeScript | API HTTP, validación y acceso a datos |
-| Persistencia local | PostgreSQL 17.12 + Sequelize 6 + Umzug | Consultas persistentes y migraciones explícitas |
+| Persistencia | PostgreSQL 17.12 local y Supabase de desarrollo + Sequelize 6 + Umzug | Consultas persistentes y migraciones explícitas |
 | Pruebas | node:test + Vitest + Testing Library | Contratos HTTP, reglas y comportamiento de la interfaz |
 | Contenedores | Docker + Docker Compose | Ejecución reproducible de frontend, backend y PostgreSQL |
 | Paquetes | pnpm | Gestión de dependencias |
@@ -44,7 +44,6 @@ El arranque normal utiliza **PostgreSQL local mediante Sequelize**, conserva los
 
 Como parte de la evolución del proyecto se prevé incorporar:
 
-- **Supabase (PostgreSQL)** para persistencia.
 - **Caddy** como proxy inverso y para configuración HTTPS.
 - Sistema de cuentas de clientes.
 - Seguimiento de casos y comunicación con representantes.
@@ -135,9 +134,11 @@ docker compose down
 
 ## PostgreSQL local para desarrollo y pruebas (P03)
 
-P03 está completada y aprobada. P04.2 incorpora modelo y migración; P04.3 conecta el arranque normal y la API con PostgreSQL. Las pruebas siguen pudiendo inyectar memoria en `createApp`. Ver [conexión, migraciones y arranque](backend/database/README.md).
+P03 está completada y aprobada; P04 está técnicamente completada tras la aprobación de su hito remoto. P04.2 incorpora modelo y migración; P04.3 conecta el arranque normal y la API con PostgreSQL; P04.4b valida la persistencia real en Supabase de desarrollo. Las pruebas siguen pudiendo inyectar memoria en `createApp`. Ver [conexión, migraciones y arranque](backend/database/README.md).
 
-P04.4a prepara la selección explícita `local`/`supabase-dev`, los usuarios directos o session pooler y TLS con CA y comprobación de nombre. Compose conserva exclusivamente el entorno local. La preparación y los comandos futuros están en la [guía de configuración](backend/database/README.md#p044a--perfiles-locales-preparados-sin-conexión-a-supabase); **no se ha validado todavía una conexión real con Supabase**. No ejecutar migraciones remotas ni reutilizar allí las suites locales de pruebas sin la autorización correspondiente.
+P04.4a incorpora la selección explícita `local`/`supabase-dev`, los usuarios directos o session pooler y TLS con CA y comprobación de nombre. **P04.4b fue verificada y aprobada por Homero**, mediante Session pooler en el puerto 5432, PostgreSQL 17.12, Data API desactivada y SSL obligatorio. La migración `001-crear-consultas`, sus objetos e historial y los permisos separados de aplicación/migrador fueron verificados. Con React y Express ejecutándose localmente, se comprobó el listado inicialmente vacío, el envío de un formulario ficticio, su registro con ID 1 por HTTP y SQL Editor y su conservación tras reiniciar únicamente el backend. Esta es evidencia aportada por el usuario; no se repitió durante la actualización documental.
+
+**Una base remota operativa no constituye un despliegue público de la aplicación.** No hay autenticación ni autorización de usuarios para consultar formularios; mantener datos ficticios y acceso controlado. Compose continúa siendo local. La [guía de persistencia](backend/database/README.md) distingue evidencia automatizada local y validación remota, y conserva las protecciones de credenciales y migraciones. No reutilizar las suites de pruebas o limpieza locales contra Supabase ni repetir operaciones remotas sin autorización específica.
 
 Se utiliza `postgres:17.12-bookworm`, fijado por [digest del índice oficial de imágenes](https://github.com/docker-library/repo-info/blob/master/repos/postgres/remote/17.12-bookworm.md). El servicio de desarrollo tiene un volumen nombrado `postgres_dev_data`, gestionado por Compose. Frontend, backend y PostgreSQL publican puertos únicamente en `127.0.0.1`.
 
@@ -173,7 +174,7 @@ node scripts/postgres.mjs verificar --limpiar
 
 `--limpiar` autoriza retirar únicamente recursos nuevos de esa ejecución, después de comprobar nombres y etiquetas. Se rechazan proyectos/volúmenes preexistentes, secretos ajenos, puertos públicos y motores Docker remotos TCP/SSH. No se ejecutan limpiezas globales, `prune` ni borrados sobre una URL de base proporcionada externamente. Sin `--limpiar`, la verificación conserva sus recursos detenidos e informa sus nombres y el directorio temporal de claves. Si no puede acreditar propiedad o completar la limpieza, falla y deja los recursos para revisión.
 
-PostgreSQL es ahora una dependencia del arranque normal y no requiere activar un perfil. Las migraciones se ejecutan por separado y nunca al iniciar Express. La validación en Supabase sigue pendiente. Continuar usando solo datos ficticios en este entorno sin autenticación de usuarios.
+PostgreSQL es una dependencia del arranque normal y no requiere activar un perfil de Compose. Las migraciones se ejecutan por separado y nunca al iniciar Express. La validación en Supabase de desarrollo está completada; esto no habilita uso productivo ni publicación. Continuar usando solo datos ficticios en este entorno sin autenticación ni autorización de usuarios.
 
 ## Ejecución sin Docker
 
@@ -329,7 +330,7 @@ formularioService.js
 POST /formulario
         │
         ▼
-Backend / Sequelize / PostgreSQL local
+Backend / Sequelize / PostgreSQL (local o Supabase de desarrollo)
         │
         ▼
 GET /formulario
