@@ -293,7 +293,7 @@ El costo de esta verificación es necesitar Docker/Buildx/tar y tiempo de constr
 
 **Fecha:** 15 de noviembre de 2026. **Fuente:** aprobación expresa de Homero en la revisión supervisada de D01–D04.
 
-Este apartado conserva los acuerdos originales del 15/11/2026. Los apartados 1–6 y las condiciones iniciales documentan los antecedentes del prototipo que entonces utilizaba memoria. Esa actualización inicial no instaló dependencias ni verificó PostgreSQL/Supabase. El estado posterior se distingue en las continuaciones: P04 está técnicamente completada y P04.4b fue aprobada el 18/11/2026; P01/P02 conservan su revisión formal pendiente.
+Este apartado conserva los acuerdos originales del 15/11/2026. Los apartados 1–6 y las condiciones iniciales documentan los antecedentes del prototipo que entonces utilizaba memoria. Esa actualización inicial no instaló dependencias ni verificó PostgreSQL/Supabase. El estado posterior se distingue en las continuaciones: P04 está técnicamente completada y P04.4b fue aprobada el 18/11/2026. P01 y P02 también fueron auditadas y aprobadas formalmente por Homero el 18/11/2026, con evidencias independientes en la sección 8 de [planificación.md](planificación.md#8-criterios-de-aceptación-y-pruebas).
 
 ### D01 — Alcance aprobado
 
@@ -365,7 +365,7 @@ P04.4b verificó la configuración y la migración existentes contra PostgreSQL 
 
 De D06 solo se consideran ahora los privilegios técnicos y la exposición de datos del entorno controlado. La autorización funcional de clientes sigue pendiente. Persistencia no autoriza despliegue público ni uso con información personal real.
 
-Los estados se evalúan mediante los criterios de [planificación.md](planificación.md). El cierre técnico de P04 no completa P01/P02, que se revisarán formalmente por separado, ni P12/P13. Homero conserva P01–P04 y P13; Martín mantiene P11/P12. Las asignaciones del equipo continúan siendo propuestas y cada tarea requiere evidencia para su cierre.
+Los estados se evalúan mediante los criterios originales de [planificación.md](planificación.md). P01–P04 están completadas para el incremento inicial: P01/P02 por su auditoría y aprobación formal independientes, P03 por su revisión de infraestructura y P04 por los hitos local/remoto. Estos cierres no completan P05–P13 ni aprueban D05–D09 o el DER conceptual futuro. Homero conserva P01–P04 y P13; Martín mantiene P11/P12. Las asignaciones del equipo continúan siendo propuestas y cada tarea requiere evidencia para su cierre.
 
 ### Continuación D03/D04 — Preparación local P04.4a (16/11/2026)
 
@@ -387,4 +387,4 @@ Este antecedente registra la preparación de P04.4a. Ya se habían aprobado P04.
 - Base inicialmente vacía y GET `/formulario` vacío. React y Express locales permitieron enviar un formulario ficticio; su registro con ID 1 se verificó mediante HTTP y SQL Editor. Los datos permanecieron después de detener y reiniciar únicamente el backend, sin recrear la base.
 - P04 se considera técnicamente completada combinando la regresión automatizada local y esta validación remota real. Las comprobaciones locales de concurrencia, idempotencia, caracteres inválidos y fallos no se presentan como reejecutadas en Supabase. No se registra una segunda ejecución remota de la migración ni pruebas destructivas no informadas.
 
-**Límites:** la base remota es operativa para el prototipo de desarrollo; frontend y backend no fueron desplegados públicamente. Los roles técnicos PostgreSQL no implementan autenticación ni autorización de clientes. Siguen pendientes esas funciones y las decisiones de despliegue/proxy/HTTPS de la aplicación. TLS entre backend y base no acredita HTTPS del sitio. Se mantienen datos ficticios, secretos privados fuera de Git, ejecución explícita de migraciones con confirmación del proyecto y prohibición de usar pruebas/limpiezas locales contra Supabase. P01 y P02 permanecen pendientes de revisión formal.
+**Límites:** la base remota es operativa para el prototipo de desarrollo; frontend y backend no fueron desplegados públicamente. Los roles técnicos PostgreSQL no implementan autenticación ni autorización de clientes. Siguen pendientes esas funciones y las decisiones de despliegue/proxy/HTTPS de la aplicación. TLS entre backend y base no acredita HTTPS del sitio. Se mantienen datos ficticios, secretos privados fuera de Git, ejecución explícita de migraciones con confirmación del proyecto y prohibición de usar pruebas/limpiezas locales contra Supabase. La aprobación posterior e independiente de P01/P02 se registra en planificación; no amplía esta evidencia remota ni los criterios originales del incremento.
