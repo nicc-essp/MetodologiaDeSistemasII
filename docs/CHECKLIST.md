@@ -1,5 +1,7 @@
 # Auditoría práctica de Docker-laws — Taller III 2026
 
+**Lectura vigente:** las secciones 1–12 conservan íntegramente el registro de la auditoría original del 18/11/2026, incluidos sus hallazgos y resultados. La [actualización documental de la sección 13](#13-actualización-documental-y-preparación-de-la-reproducción-limpia--18112026) registra las correcciones posteriores, la rama oficial `main` y los pendientes actuales. Para el próximo ensayo utilizar la secuencia de 13.4, que sustituye operativamente al ejemplo preliminar de la sección 11. **La reproducción limpia sigue PENDIENTE; no se han ejecutado nuevas suites ni cambiado las 437 pruebas históricas.**
+
 ## 1. Identificación y alcance
 
 | Dato | Referencia de esta auditoría |
@@ -343,3 +345,242 @@ Esta secuencia es operativa; no incluye preguntas teóricas ni preparación indi
 **Prioridad:** P1-01, P2-01/P2-02 y ensayo P2-03; después revisión/integración manual del documento. No iniciar funcionalidades nuevas para compensar defectos de documentación o reproducción.
 
 Al finalizar la auditoría se comprobaron hashes de los archivos versionados, rama, staging e inventario Docker; no se modificaron fuentes ni otros documentos. El único archivo nuevo de trabajo autorizado es `docs/CHECKLIST.md`. No se ejecutaron operaciones de escritura de Git. Las correcciones propuestas quedan a revisión del usuario.
+
+## 13. Actualización documental y preparación de la reproducción limpia — 18/11/2026
+
+### 13.1. Referencias Git y rama oficial de entrega
+
+Actualización posterior a la auditoría original y a la integración manual de `develop` en `main` informada por Homero. Se consultaron únicamente referencias locales, `git ls-remote` y la API pública de GitHub, sin fetch, cambios de rama ni escritura de referencias.
+
+| Referencia comprobada | Evidencia nueva y alcance |
+| --- | --- |
+| Rama y HEAD de trabajo | `docs/checklist`, `bcf24898e5afe9616795bd2f7f20179442d540b3` (`docs: auditar preparación práctica para Taller III`); copia inicialmente limpia. Este commit ya registra la auditoría original. |
+| `develop` local, `origin/develop` local y `refs/heads/develop` público | `ec30dc3d716f2e6a6cb0e625fc09c00fd621d421`; no aparecieron cambios nuevos en esa rama. |
+| `refs/heads/main` público, rama oficial de entrega | `686c4c2ccf9b9ad4ffc02636a15f26235c73fe3d`; sus padres son `4fbeabb04667a04055d4e20ff7a81fbff4339dc1` y `ec30dc3d716f2e6a6cb0e625fc09c00fd621d421`. GitHub mantiene `main` como rama predeterminada y el repositorio público. |
+| Contenido público de `main` frente a `develop` | Árbol idéntico: `d9dc06327fc1fdb400726279e9fbd555e0e78187`, también obtenido localmente con `git rev-parse 'develop^{tree}'`. La comparación pública informa `behind_by=0`, `ahead_by=4` y cero archivos diferentes; son diferencias de historial, no cuatro cambios funcionales nuevos. |
+| `main` y `origin/main` **locales** | Siguen en `4fbeabb04667a04055d4e20ff7a81fbff4339dc1`. Son referencias locales desactualizadas; no describen el `main` público actual. No se actualizaron durante este trabajo. |
+| Integración documental pendiente | `git diff --stat develop HEAD` identifica únicamente el checklist. El árbol público de `main` no contiene `docs/CHECKLIST.md`; tampoco contiene las correcciones de esta copia de trabajo. Quedan revisión, commit e integración manuales en la rama oficial. |
+
+Fuentes públicas de esta comprobación: [commit de entrega](https://github.com/nicc-essp/MetodologiaDeSistemasII/commit/686c4c2ccf9b9ad4ffc02636a15f26235c73fe3d), [comparación exacta con develop](https://api.github.com/repos/nicc-essp/MetodologiaDeSistemasII/compare/ec30dc3d716f2e6a6cb0e625fc09c00fd621d421...686c4c2ccf9b9ad4ffc02636a15f26235c73fe3d) y [árbol público comprobado](https://api.github.com/repos/nicc-essp/MetodologiaDeSistemasII/git/trees/d9dc06327fc1fdb400726279e9fbd555e0e78187?recursive=1).
+
+**P1-01 queda RESUELTO:** el `main` público sí contiene la refactorización, persistencia, pruebas, decisiones y cierres P01–P04 de `develop`. Las instrucciones corregidas seleccionan `--branch main`. Esto no da por integrada esta revisión documental ni acredita una instalación nueva; esos pendientes corresponden a P2-04 y P2-03.
+
+### 13.2. Correcciones y seguimiento de hallazgos
+
+| ID estable | Estado después de esta corrección | Cambio y evidencia |
+| --- | --- | --- |
+| P1-01 | RESUELTO | Merge y equivalencia de árboles comprobados en 13.1; `main` identificada expresamente en el clonado y las guías vigentes. |
+| P2-01 | RESUELTO en la copia de trabajo; publicación pendiente | `README.md`, sección 7 de `docs/decisiones-diseno.md` y comienzo/cierre de `backend/database/README.md` reconocen la auditoría y aprobación independientes de P01/P02. Coinciden con planificación, sin alterar sus criterios ni los resultados remotos. |
+| P2-02 | RESUELTO en la copia de trabajo; ensayo pendiente | README distingue aplicaciones en Compose de React/Express en el host con PostgreSQL en Docker, sus herramientas y detención segura. No anuncia una modalidad completamente independiente de Docker. |
+| P2-03 | **PENDIENTE** | No se instalaron dependencias, reconstruyeron imágenes completas ni realizaron nuevos recorridos de navegador. La secuencia 13.4 se prepara para ejecución posterior por Homero con supervisión. |
+| P2-04 | PARCIAL; integración en `main` **PENDIENTE** | La auditoría original ya está en el commit local `bcf2489`, avance respecto del archivo nuevo de la auditoría. No figura en el árbol público de `main`; faltan revisión e integración manual del checklist y de estas correcciones. |
+| P3-01 | ABIERTO, opcional | No se modificó la imagen de portada ni se midió un resultado nuevo. |
+| P3-02 | RESUELTO en la copia de trabajo; publicación pendiente | `frontend/README.md` reemplaza la plantilla Vite por una guía breve de Docker-laws: instalación, inicio, comprobaciones existentes, dependencias API/PG y enlaces relativos al manual central. |
+| P3-03 | ABIERTO, opcional | Se mantienen las etiquetas Node y las dependencias existentes; no se instala ni actualiza nada. No hay un diagnóstico nuevo de vulnerabilidades. |
+
+Archivos modificados: [README principal](../README.md), [README frontend](../frontend/README.md), [guía de persistencia](../backend/database/README.md), [decisiones de diseño](decisiones-diseno.md) y este checklist. Además de los hallazgos, se corrigió la descripción vigente de `backend/data/` y se incorporaron al árbol orientativo los módulos de conexión/migraciones ya existentes.
+
+La revisión contrastó los comandos con ambos manifiestos, los scripts reales, la configuración PostgreSQL, los Dockerfiles y ambos Compose. Las opciones de inicio `--host`, `--port` y `--strictPort` existen en la CLI de Vite instalada; `pnpm help with` confirma el uso documentado de `with current`, sin ejecutar una instalación. Se revisaron diff, rutas, enlaces locales y `git diff --check`. **Estos controles documentales no son nuevas pruebas de aplicación.**
+
+Se conservan las evidencias históricas de PostgreSQL, Supabase y accesibilidad, con su fuente y límites; no se repitieron. P01–P04 continúan cerradas, D01–D04 aprobadas; P05–P13, D05–D09 y el DER futuro no se modifican ni aprueban. La planificación y la discusión exploratoria se mantienen sin cambios como registros fechados: las referencias a una plantilla frontend o al contraste futuro con la consigna describen su contexto anterior. El análisis práctico de la consigna y el estado documental posterior están en este checklist; no se reorganiza la evolución del proyecto.
+
+### 13.3. Estado vigente de los requisitos del Taller III
+
+La matriz histórica de la sección 3 se conserva. Se actualiza su evidencia sin atribuir nuevas ejecuciones:
+
+| Requisito | Estado vigente | Evidencia actualizada y pendiente |
+| --- | --- | --- |
+| T3-01 | CUMPLIDO | La versión técnica auditada ya está en el `main` público, por la equivalencia de árboles de 13.1. Falta incorporar la actualización documental de esta rama. |
+| T3-03 | **PARCIAL** | Se conservan las 437 pruebas históricas, el build y las verificaciones locales/remotas identificadas. Falta demostrar la entrega elegida desde copia nueva con navegador real. |
+| T3-04 | **PARCIAL** | Herramientas, lockfiles, rama `main`, configuración y modalidades corregidas en README; secuencia aislada preparada. Falta integrar los documentos y ejecutar personalmente la instalación limpia. |
+| T3-06 | **PARCIAL** | Resueltas las contradicciones de estados y de dependencia Docker en esta copia. El recorrido completo de arranque, API/interfaz, persistencia y detención continúa pendiente de validación limpia. |
+| T3-10 / T3-12 | CUMPLIDO, con publicación pendiente | Los diez casos y sus rutas ya están registrados en el commit local del checklist; P2-04 exige llevarlos a la entrega pública. No se afirma que el `main` actual contenga este archivo. |
+
+Los demás requisitos conservan su estado: **11 CUMPLIDO, 3 PARCIAL, 0 NO CUMPLIDO y 0 NO VERIFICADO**, sobre 14 requisitos prácticos. Se mantiene el dictamen orientativo **CON OBSERVACIONES**. El conteo sigue siendo **437 casos hoja únicos históricos**; no se suman verificaciones documentales ni se repiten suites. Los siete elementos NO OBLIGATORIO de la sección 8 siguen fuera de esa matriz.
+
+### 13.4. Secuencia PowerShell para la próxima reproducción limpia (PENDIENTE)
+
+**Procedimiento preparado, no ejecutado.** Primero revisar e integrar manualmente esta documentación en `main` (P2-04); comprobar después el SHA público que se clonará. La referencia `686c4c2` acredita el merge técnico, pero no contiene todavía estas instrucciones nuevas. Registrar el SHA que efectivamente se ensaye, sin asumir que siempre será el mismo.
+
+Modalidad elegida: **React/Vite y Express en el host; únicamente PostgreSQL mediante Compose**. No acredita por sí sola una reconstrucción completa de imágenes frontend/backend. Usar Windows con Node 22 >=22.22.2, pnpm 12.3.4, Docker Desktop con motor Linux y Compose; red o cachés suficientes. Buildx y tar se requieren para las verificaciones Docker adicionales. No utilizar Supabase ni copiar claves, perfiles o `.env` del desarrollo habitual. Ejecutar los bloques uno a uno y detenerse ante cualquier error; en Windows PowerShell un fallo nativo no siempre interrumpe automáticamente el bloque.
+
+**1. Terminal A: clonar `main` en una carpeta nueva y registrar la referencia.**
+
+```powershell
+$carpetaEnsayo = Join-Path ([System.IO.Path]::GetTempPath()) ('docker-laws-t3-' + [guid]::NewGuid().ToString('N'))
+if (Test-Path -LiteralPath $carpetaEnsayo) { throw 'La carpeta de ensayo ya existe.' }
+git clone --branch main --single-branch https://github.com/nicc-essp/MetodologiaDeSistemasII.git $carpetaEnsayo
+if ($LASTEXITCODE -ne 0) { throw 'Falló el clonado; no continuar.' }
+Set-Location -LiteralPath $carpetaEnsayo
+git branch --show-current
+git rev-parse HEAD
+git status --short
+node --version
+pnpm --version
+```
+
+Confirmar `main`, el commit elegido y copia inicialmente limpia. Registrar la ruta de esta copia para las terminales B/C. No copiar archivos privados ni actualizar manifiestos para eludir una incompatibilidad.
+
+**2. Terminal A: aislar variables de esta sesión y verificar que Docker sea local.** Solo se eliminan variables del proceso de esta terminal, sin imprimir sus valores ni cambiar el entorno persistente de Windows:
+
+```powershell
+Get-ChildItem Env: | Where-Object {
+    $_.Name -match '^(COMPOSE_|POSTGRES_|DATABASE_|SUPABASE_|PG)' -or
+    $_.Name -in @('CORS_ORIGINS', 'VITE_API_BASE_URL')
+} | ForEach-Object { Remove-Item -LiteralPath ('Env:' + $_.Name) }
+$endpointEnsayo = docker context inspect --format '{{.Endpoints.docker.Host}}'
+if ($LASTEXITCODE -ne 0 -or $endpointEnsayo -notmatch '^(npipe:|unix:)') { throw 'Se requiere un motor Docker local.' }
+if ($env:DOCKER_HOST -and $env:DOCKER_HOST -notmatch '^(npipe:|unix:)') { throw 'DOCKER_HOST remoto no autorizado.' }
+docker info --format '{{.OSType}}'
+docker compose version
+```
+
+Confirmar motor `linux`. Si los puertos HTTP 3001 o 5173 están ocupados, detener el ensayo y acordar cómo continuarlo; no detener procesos ajenos. No utilizar un puerto alternativo elegido silenciosamente por Vite.
+
+```powershell
+if (@(Get-NetTCPConnection -State Listen -LocalPort 3001,5173 -ErrorAction SilentlyContinue).Count) {
+    throw 'Los puertos HTTP del ensayo están ocupados; no detener servicios ajenos.'
+}
+```
+
+**3. Terminal A: instalar con ambos lockfiles, sin cambiar versiones.**
+
+```powershell
+pnpm --dir backend install --frozen-lockfile
+if ($LASTEXITCODE -ne 0) { throw 'Falló la instalación backend.' }
+pnpm --dir frontend install --frozen-lockfile
+if ($LASTEXITCODE -ne 0) { throw 'Falló la instalación frontend.' }
+```
+
+Registrar resultados reales. Si el gestor falla, revisar el diagnóstico y la alternativa documentada en README antes de continuar; no afirmar una instalación correcta por disponer de `node_modules` de otra copia.
+
+**4. Terminal A: reservar un proyecto Compose propio y configuración local nueva.**
+
+```powershell
+$proyectoEnsayo = 'docker-laws-t3-' + [guid]::NewGuid().ToString('N')
+if ((Test-Path -LiteralPath .env) -or (Test-Path -LiteralPath secrets/postgres)) { throw 'La copia ya contiene configuración privada; revisar antes de continuar.' }
+$recursosEnsayo = @(
+    docker container ls -a --filter "label=com.docker.compose.project=$proyectoEnsayo" --format '{{.ID}}'
+    docker volume ls --filter "name=$proyectoEnsayo" --format '{{.Name}}'
+    docker network ls --filter "name=$proyectoEnsayo" --format '{{.Name}}'
+)
+if ($recursosEnsayo.Count) { throw 'El identificador ya tiene recursos; no reutilizarlos.' }
+@(
+    "COMPOSE_PROJECT_NAME=$proyectoEnsayo"
+    'POSTGRES_TARGET=local'
+    'POSTGRES_HOST=127.0.0.1'
+    'POSTGRES_PORT=0'
+    'POSTGRES_DB=docker_laws_dev'
+    'POSTGRES_SECRETS_DIR=./secrets/postgres'
+    'CORS_ORIGINS=http://localhost:5173'
+    'VITE_API_BASE_URL=http://localhost:3001'
+) | Set-Content -LiteralPath .env -Encoding ascii
+node scripts/postgres.mjs preparar
+if ($LASTEXITCODE -ne 0) { throw 'Falló la preparación de claves nuevas.' }
+docker compose --project-name $proyectoEnsayo --env-file .env config --quiet
+```
+
+El nombre único separa el volumen `${proyectoEnsayo}_postgres_dev_data` y la red de los habituales. Las tres claves se generan de nuevo dentro de esta copia y permanecen ignoradas; `.env` solo contiene parámetros públicos. `POSTGRES_PORT=0` se usa aquí únicamente para que Docker asigne un puerto libre: se sustituye por el puerto real **antes** de iniciar el cliente PostgreSQL. No es un puerto válido para Sequelize.
+
+**5. Terminal A: arrancar PostgreSQL y fijar el puerto asignado.**
+
+```powershell
+docker compose --project-name $proyectoEnsayo --env-file .env up -d --wait postgres
+if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL no quedó disponible; no migrar.' }
+$direccionEnsayo = docker compose --project-name $proyectoEnsayo --env-file .env port postgres 5432
+if ($LASTEXITCODE -ne 0 -or $direccionEnsayo -notmatch '^127\.0\.0\.1:(\d+)$') { throw 'Publicación PostgreSQL inesperada.' }
+$puertoEnsayo = $Matches[1]
+(Get-Content -LiteralPath .env) -replace '^POSTGRES_PORT=0$', "POSTGRES_PORT=$puertoEnsayo" |
+    Set-Content -LiteralPath .env -Encoding ascii
+docker compose --project-name $proyectoEnsayo --env-file .env ps postgres
+docker volume inspect "${proyectoEnsayo}_postgres_dev_data" --format '{{json .Labels}}'
+```
+
+Comprobar salud, publicación solo en loopback y etiqueta `com.docker.compose.project` igual al UUID reservado. Si no coinciden, detenerse sin eliminar recursos. No modificar el entorno de desarrollo habitual para corregir el ensayo.
+
+**6. Terminal A: migrar explícitamente esta base local nueva.**
+
+```powershell
+pnpm --dir backend db:migrate
+if ($LASTEXITCODE -ne 0) { throw 'Falló la migración local; revisar antes de reintentar.' }
+pnpm --dir backend db:status
+```
+
+Esperado: `001-crear-consultas` aplicada y sin pendientes. `db:status` se usa solo aquí contra la base local del ensayo; no es una herramienta remota de solo lectura. Nunca usar el inicializador local, `test:postgres` o herramientas de limpieza contra Supabase. La autenticación del migrador y la preparación de la aplicación se comprobarán al migrar e iniciar; no leer ni imprimir contraseñas.
+
+**7. Terminales B/C: iniciar las aplicaciones desde la raíz de la copia nueva.** Abrir ambas en la ruta registrada en el paso 1. En B, neutralizar parámetros heredados antes de arrancar Express; este cargará el `.env` local de la copia:
+
+```powershell
+Get-ChildItem Env: | Where-Object {
+    $_.Name -match '^(COMPOSE_|POSTGRES_|DATABASE_|SUPABASE_|PG)' -or $_.Name -eq 'CORS_ORIGINS'
+} | ForEach-Object { Remove-Item -LiteralPath ('Env:' + $_.Name) }
+$env:POSTGRES_TARGET = 'local'
+pnpm --dir backend start
+```
+
+En C:
+
+```powershell
+$env:VITE_API_BASE_URL = 'http://localhost:3001'
+pnpm --dir frontend dev --host localhost --port 5173 --strictPort
+```
+
+Mantener ambas terminales abiertas. No iniciar los servicios frontend/backend de Compose sobre esos mismos puertos. El prototipo no tiene autenticación/autorización funcional; utilizar únicamente datos ficticios y un entorno controlado, sin publicar la aplicación.
+
+**8. Terminal A y navegador: comprobar API y crear/recuperar una consulta ficticia.**
+
+```powershell
+Invoke-RestMethod http://localhost:3001/health
+(Invoke-WebRequest -UseBasicParsing -Uri http://localhost:3001/formulario).Content
+```
+
+Esperado: proceso disponible y colección inicial `[]`. Abrir `http://localhost:5173/consulta-juridica`, completar los siete campos con valores de demostración —por ejemplo, Consultante, Prueba, DOC-FICTICIO, TEL-FICTICIO, `ensayo-t3@example.test`, Demostración y un mensaje expresamente ficticio— y enviar una sola vez. Verificar confirmación real, limpieza tras éxito y el mismo registro en `/consultas`; un listado vacío debe distinguirse de un fallo.
+
+```powershell
+$consultaEnsayo = Invoke-RestMethod http://localhost:3001/formulario | Select-Object -First 1
+if (-not $consultaEnsayo) { throw 'No se recuperó la consulta ficticia.' }
+Invoke-RestMethod ("http://localhost:3001/formulario/{0}" -f $consultaEnsayo.id)
+```
+
+Registrar el ID realmente asignado y comparar los siete textos entre interfaz, listado y detalle HTTP. No interpretar `/health` como verificación continua de la base.
+
+**9. Reiniciar solamente Express y comprobar persistencia.** En B usar `Ctrl+C`, esperar el cierre y volver a ejecutar `pnpm --dir backend start`, desde la misma copia y configuración local. En A repetir el GET por `$consultaEnsayo.id` y actualizar `/consultas` en el navegador. Deben conservarse ID y contenido; no reiniciar ni borrar PostgreSQL para este paso.
+
+**10. Terminal A: ejecutar y registrar las comprobaciones automatizadas relevantes.** Estos son comandos futuros, no ejecuciones de esta actualización:
+
+```powershell
+pnpm --dir backend test
+pnpm --dir backend typecheck
+pnpm --dir frontend test
+pnpm --dir frontend lint
+pnpm --dir frontend build
+```
+
+Para las verificaciones de infraestructura del proyecto, con Docker/Buildx/tar disponibles y autorización para los recursos nuevos de los runners:
+
+```powershell
+node --test scripts/postgres.test.mjs scripts/verificar-docker.test.mjs
+pnpm --dir backend test:postgres --limpiar
+node scripts/verificar-docker.mjs --modo contexto
+```
+
+`test:postgres` crea sus propias instancias nuevas, descarta variables remotas y solo retira sus recursos acreditados con `--limpiar`; no utilizar directamente los archivos de integración con otra base. Registrar cada exit code y su salida real antes de continuar. No anticipar resultados ni copiar los conteos históricos como si fueran una nueva ejecución; no hay script backend de lint/build ni frontend de typecheck.
+
+**11. Detener de forma segura y conservar la evidencia.** Usar `Ctrl+C` solo en B/C. En A:
+
+```powershell
+docker compose --project-name $proyectoEnsayo --env-file .env stop postgres
+docker compose --project-name $proyectoEnsayo --env-file .env ps -a
+git status --short
+```
+
+Conservar el volumen y la carpeta de esta copia hasta revisar los resultados; no se requiere eliminar ninguno para dar por terminado el ensayo. No usar `down --volumes`, `prune`, borrados de bases, limpieza global ni secretos habituales. Anotar fecha, commit, versiones, proyecto/puerto propios, resultados de instalación/migración/pruebas y del recorrido de navegador, persistencia y detención, sin secretos. Los fallos y límites deben quedar registrados antes de reconsiderar P2-03 o los estados PARCIAL; una nueva revisión de accesibilidad no se presume por este recorrido.
+
+### 13.5. Pendientes después de esta corrección
+
+- Revisión y commit/integración manuales de esta documentación en `main` (P2-04); las referencias locales de `main` siguen sin actualizarse.
+- **P2-03 PENDIENTE:** ejecutar la reproducción limpia con Homero, desde `main` ya actualizado y en una copia nueva. T3-03, T3-04 y T3-06 permanecen PARCIAL hasta disponer de evidencia suficiente.
+- P3-01/P3-03 son mejoras opcionales; no se cambian código, imágenes, configuraciones o dependencias para resolverlas en esta etapa.
+- No hay una decisión funcional nueva que aprobar para estas correcciones. La preparación teórica individual, adaptación de P05–P13, cuentas/permisos y despliegue siguen fuera del trabajo realizado.
+
+**Alcance real de la actualización:** solo documentación y controles de lectura/formato; sin instalaciones, suites nuevas, migraciones, conexiones Supabase ni operaciones Git de escritura. El dictamen permanece **CON OBSERVACIONES** y los resultados históricos de las secciones 1–12 permanecen intactos.

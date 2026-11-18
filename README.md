@@ -8,7 +8,7 @@ El proyecto busca ofrecer información sobre los servicios del estudio y permiti
 
 Actualmente se encuentra implementado el flujo de formularios de consulta: un usuario puede completar y enviar una consulta desde el frontend, el backend la guarda en PostgreSQL mediante Sequelize y las consultas recibidas pueden visualizarse desde otra sección de la aplicación. La persistencia está verificada tanto localmente como contra un proyecto Supabase exclusivo de desarrollo.
 
-El proyecto se encuentra en desarrollo. P04 está técnicamente completada y P04.4b fue validada y aprobada por Homero el 18 de noviembre de 2026. Las cuentas de clientes, la autorización funcional, el seguimiento de casos y el despliegue público continúan pendientes.
+El proyecto se encuentra en desarrollo. **P01–P04 están completadas y aprobadas para el incremento inicial de persistencia de consultas**: P01/P02 por su auditoría formal independiente, P03 por su revisión de infraestructura y P04 por sus hitos local y Supabase de desarrollo. P04.4b fue validada y aprobada por Homero el 18 de noviembre de 2026. Las cuentas de clientes, la autorización funcional, el seguimiento de casos y el despliegue público continúan pendientes; P05–P13 no se consideran completadas.
 
 ## Estado actual
 
@@ -26,7 +26,7 @@ Actualmente se encuentran implementadas:
 - Configuración de CORS para la comunicación entre frontend y backend.
 - Ejecución conjunta de frontend y backend mediante Docker Compose.
 
-El arranque normal utiliza **PostgreSQL mediante Sequelize**, conserva los datos al reiniciar y comienza sin registros automáticos. El destino predeterminado y Docker Compose siguen siendo locales; el perfil `supabase-dev` permite usar la base remota de desarrollo validada. El almacén en memoria permanece para pruebas aisladas; no se utiliza como fallback ante errores de la base. El cierre técnico de P04 no completa P01 ni P02, cuya revisión formal se realizará por separado.
+El arranque normal utiliza **PostgreSQL mediante Sequelize**, conserva los datos al reiniciar y comienza sin registros automáticos. El destino predeterminado y Docker Compose siguen siendo locales; el perfil `supabase-dev` permite usar la base remota de desarrollo validada. El almacén en memoria permanece para pruebas aisladas; no se utiliza como fallback ante errores de la base. Los cierres independientes y sus evidencias se registran en [planificación](docs/planificación.md#8-criterios-de-aceptación-y-pruebas).
 
 ## Stack tecnológico
 
@@ -55,13 +55,15 @@ Estas funcionalidades todavía no forman parte de la implementación actual. Su 
 ```text
 ├── backend/
 │   ├── controllers/          # Controladores de las peticiones HTTP
-│   ├── config/               # Validación de configuración pública
-│   ├── data/                 # Almacenamiento provisional de datos
+│   ├── config/               # Validación de CORS y configuración PostgreSQL
+│   ├── data/                 # Acceso PostgreSQL y memoria para pruebas aisladas
+│   ├── database/             # Conexión, runner Umzug y guía de persistencia
 │   ├── middleware/           # Errores HTTP seguros
+│   ├── migrations/           # Cambios de esquema versionados
 │   ├── models/               # Modelos y contratos de datos
 │   ├── routes/               # Rutas de la API
 │   ├── validations/          # Validación pura de entradas
-│   ├── tests/                # Pruebas aisladas, HTTP y tipos
+│   ├── tests/                # Pruebas aisladas, HTTP, PostgreSQL y tipos
 │   ├── Dockerfile            # Imagen Docker del backend
 │   ├── app.ts                # Prepara Express sin abrir un puerto
 │   ├── index.ts              # Configuración y arranque explícito
@@ -80,7 +82,9 @@ Estas funcionalidades todavía no forman parte de la implementación actual. Su 
 │   └── package.json
 │
 ├── docs/
-│   └── decisiones-diseno.md  # Análisis y decisiones de diseño
+│   ├── decisiones-diseno.md  # Análisis y decisiones de diseño
+│   ├── planificación.md      # Tareas, dependencias y cierres aprobados
+│   └── CHECKLIST.md          # Auditoría práctica y reproducción limpia pendiente
 │
 ├── docker-compose.yml        # Orquestación de frontend, backend y PostgreSQL
 └── README.md
@@ -90,20 +94,33 @@ Estas funcionalidades todavía no forman parte de la implementación actual. Su 
 
 Para las herramientas de desarrollo y pruebas se utiliza **Node 22 desde 22.22.2** y **pnpm 12.3.4**. Ambos manifiestos fijan el gestor; los lockfiles se conservan para reproducir la instalación. Las imágenes siguen siendo de desarrollo y usan `node:22-alpine`.
 
-### Opción recomendada: Docker
+**La rama oficial de entrega del Taller III es `main`.** Su referencia pública `686c4c2` contiene la refactorización, persistencia, pruebas y documentación previamente integradas en `develop`; las actualizaciones documentales de esta revisión requieren todavía commit e integración manuales. El [checklist](docs/CHECKLIST.md#13-actualización-documental-y-preparación-de-la-reproducción-limpia--18112026) registra la comprobación Git y los pendientes de entrega.
+
+| Modalidad | Herramientas necesarias | Qué se ejecuta |
+| --- | --- | --- |
+| Aplicación con Compose | Git, Node/pnpm en el host para preparar claves y ejecutar migraciones; Docker con motor Linux y Compose v2 o posterior, como Docker Desktop con contenedores Linux. | Frontend, backend y PostgreSQL en contenedores. |
+| Aplicación en el host | Git, Node/pnpm y dependencias de ambos componentes; el mismo Docker/Compose para PostgreSQL. | React/Vite y Express en terminales locales; PostgreSQL en un contenedor. |
+
+Se necesita acceso a los registros de paquetes e imágenes, o una caché suficiente. Para los verificadores Docker adicionales también se necesitan Buildx y `tar` compatibles. No hay un procedimiento completamente independiente de Docker verificado para la persistencia local.
+
+Los comandos siguientes parten de la raíz del repositorio y de una terminal sin variables remotas heredadas. Para el primer arranque se pueden conservar los valores locales predeterminados, sin crear `.env`. Si ya existe configuración privada, revisar su destino sin mostrar secretos ni sobrescribir archivos. Para una **copia nueva aislada de los recursos habituales**, seguir la secuencia PowerShell del checklist; su ejecución integral sigue pendiente.
+
+### Opción recomendada: aplicación con Docker Compose
 
 #### 1. Clonar el repositorio
 
-```bash
-git clone https://github.com/nicc-essp/MetodologiaDeSistemasII.git
+```powershell
+git clone --branch main https://github.com/nicc-essp/MetodologiaDeSistemasII.git
 cd MetodologiaDeSistemasII
+git branch --show-current
+git rev-parse HEAD
 ```
 
 #### 2. Preparar PostgreSQL y aplicar la migración explícita
 
 Con Docker instalado y en ejecución, preparar las claves privadas de P03 y las herramientas del backend:
 
-```bash
+```powershell
 pnpm --dir backend install --frozen-lockfile
 node scripts/postgres.mjs preparar
 docker compose up -d --wait postgres
@@ -114,7 +131,7 @@ La migración se ejecuta desde el host con el rol migrador. El backend del conte
 
 #### 3. Construir e iniciar la aplicación
 
-```bash
+```powershell
 docker compose up --build
 ```
 
@@ -124,13 +141,22 @@ Docker Compose inicia frontend, backend y PostgreSQL:
 - Backend: `http://localhost:3001`
 - PostgreSQL: `127.0.0.1:5433`, solo para herramientas locales.
 
-El backend espera disponibilidad de PostgreSQL y verifica esquema/permisos antes de escuchar HTTP. Sin conexión o sin migración, falla de forma segura y no utiliza memoria.
+El backend espera disponibilidad de PostgreSQL y verifica esquema/permisos antes de escuchar HTTP. Sin conexión o sin migración, falla de forma segura y no utiliza memoria. Comprobar desde otra terminal:
+
+```powershell
+Invoke-RestMethod http://localhost:3001/health
+(Invoke-WebRequest -UseBasicParsing -Uri http://localhost:3001/formulario).Content
+```
+
+El primer comando debe indicar el estado del proceso; no comprueba continuamente la base. El segundo debe devolver `[]` en una base nueva. Abrir el frontend y comprobar creación/listado solo con datos ficticios. Los puertos 5173, 3001 y 5433 deben estar disponibles; si están ocupados, no detener procesos ajenos.
 
 Para detenerlos:
 
-```bash
-docker compose down
+```powershell
+docker compose stop
 ```
+
+Detener únicamente el proyecto propio. El volumen conserva las consultas; `docker compose down` retira contenedores y red de ese proyecto, pero conserva el volumen si no se añade `--volumes`. No borrar volúmenes ni claves para reparar un fallo de autenticación.
 
 ## PostgreSQL local para desarrollo y pruebas (P03)
 
@@ -176,15 +202,17 @@ node scripts/postgres.mjs verificar --limpiar
 
 PostgreSQL es una dependencia del arranque normal y no requiere activar un perfil de Compose. Las migraciones se ejecutan por separado y nunca al iniciar Express. La validación en Supabase de desarrollo está completada; esto no habilita uso productivo ni publicación. Continuar usando solo datos ficticios en este entorno sin autenticación ni autorización de usuarios.
 
-## Ejecución sin Docker
+## Frontend y backend en el host, con PostgreSQL en Docker
 
-También es posible ejecutar cada parte del proyecto por separado.
+Esta modalidad requiere las mismas versiones de Node/pnpm y Docker/Compose activo para PostgreSQL. Las dependencias se instalan en ambos componentes con sus lockfiles. No iniciar a la vez los servicios frontend/backend de Compose sobre los mismos puertos; mantener los valores locales predeterminados o revisar la configuración acordada.
 
 ### Frontend
 
-```bash
+En una terminal propia:
+
+```powershell
 pnpm --dir frontend install --frozen-lockfile
-pnpm --dir frontend dev
+pnpm --dir frontend dev --host localhost --port 5173 --strictPort
 ```
 
 El frontend estará disponible en:
@@ -195,7 +223,9 @@ http://localhost:5173
 
 ### Backend
 
-```bash
+En otra terminal, desde la misma raíz y con destino PostgreSQL local:
+
+```powershell
 pnpm --dir backend install --frozen-lockfile
 node scripts/postgres.mjs preparar
 docker compose up -d --wait postgres
@@ -208,6 +238,8 @@ El backend estará disponible en:
 ```text
 http://localhost:3001
 ```
+
+Las comprobaciones HTTP del apartado anterior también aplican aquí. Para detener, usar `Ctrl+C` en las terminales propias de Vite y Express y `docker compose stop postgres` para ese PostgreSQL. Se conserva su volumen. El ensayo limpio del checklist utiliza un nombre de proyecto único y un puerto PostgreSQL asignado por Docker para evitar reutilizar el desarrollo habitual.
 
 ## API de formularios
 
@@ -283,7 +315,7 @@ pnpm --dir backend start
 
 ```powershell
 $env:VITE_API_BASE_URL = 'http://127.0.0.1:3001'
-pnpm --dir frontend dev --host 0.0.0.0
+pnpm --dir frontend dev --host 127.0.0.1 --port 5173 --strictPort
 ```
 
 Abrir `http://127.0.0.1:5173`. Reiniciar los procesos al cambiar configuración; un bundle construido requiere reconstrucción. Las variables `VITE_*` son públicas: no deben contener secretos. El nombre `backend` de la red Docker no es una URL general para el navegador del host.
@@ -353,3 +385,5 @@ docs/decisiones-diseno.md
 ```
 
 Allí se documentan el código analizado, diagnóstico, alternativas consideradas, decisiones tomadas, evidencia y trade-offs.
+
+La [discusión técnica](docs/discusion-tecnica.md) conserva el análisis exploratorio del 14/11/2026, anterior a la persistencia. Sus recomendaciones y DER de seis entidades no constituyen decisiones aprobadas ni describen el esquema implementado. D01–D04 y el cierre P01–P04 están en las decisiones y la planificación; D05–D09 continúan pendientes. La [auditoría del Taller III](docs/CHECKLIST.md) conserva las 437 pruebas únicas y resultados históricos del 18/11/2026, junto con una actualización documental y el ensayo limpio todavía pendiente. Ese ensayo no se ha ejecutado durante esta corrección.
