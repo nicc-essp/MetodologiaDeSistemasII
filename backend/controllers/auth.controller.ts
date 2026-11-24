@@ -1,30 +1,52 @@
 import type { Request, Response } from 'express';
-import RegisterDto from '../models/register.dto';
-import LoginDto from '../models/login.dto';
-import { registrarUsuario, iniciarSesion } from '../services/auth.service';
+import { ErrorCuenta } from '../data/cuentas-guardadas';
+import { leerToken } from '../middleware/sesion.middleware';
+import type { ServicioAuth } from '../services/auth.service';
+import { validarLogin, validarRegistro } from '../validations/auth.validation';
 
+function responderError(res: Response, error: unknown): Response {
+  if (error instanceof ErrorCuenta) {
+    return res.status(error.status).json({ message: error.message });
+  }
+  return res.status(400).json({ message: 'Error al procesar la cuenta' });
+}
 
-export const registerUser = async (req: Request, res: Response) => {
-  try {
-    const { nombre, email, password, tipo } = req.body;
-    const registerDto = new RegisterDto(nombre, email, password, tipo);
-    registerDto.validate();
-    const usuario = await registrarUsuario(registerDto);
-    return res.status(201).json(JSON.stringify(usuario));
-  } catch {
-    return res.status(400).json({ message: 'Error al crear el usuario' });
-  }
-};
+export function crearControladorAuth(servicio: ServicioAuth) {
+  return {
+    async registerUser(req: Request, res: Response): Promise<Response> {
+      const resultado = validarRegistro(req.body);
+      if (!resultado.ok) return res.status(400).json({ message: resultado.message });
+      try {
+        const usuario = await servicio.registrar(resultado.datos);
+        return res.status(201).json(usuario);
+      } catch (error) {
+        return responderError(res, error);
+      }
+    },
 
-export const loginUser = async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body;
-    const loginDto = new LoginDto(email, password);
-    loginDto.validate();
-    const usuario = await iniciarSesion(loginDto);
-    return res.status(200).json(usuario);
-  }
-  catch {
-    return res.status(400).json({ message: 'Error al iniciar sesión' });
-  }
-};
+    async loginUser(req: Request, res: Response): Promise<Response> {
+      const resultado = validarLogin(req.body);
+      if (!resultado.ok) return res.status(400).json({ message: resultado.message });
+      try {
+        const sesion = await servicio.iniciarSesion(resultado.datos);
+        return res.status(200).json(sesion);
+      } catch (error) {
+        return responderError(res, error);
+      }
+    },
+
+    async me(req: Request, res: Response): Promise<Response> {
+      try {
+        const usuario = await servicio.usuarioDeToken(leerToken(req));
+        return res.status(200).json(usuario);
+      } catch (error) {
+        return responderError(res, error);
+      }
+    },
+
+    async logoutUser(req: Request, res: Response): Promise<Response> {
+      await servicio.cerrarSesion(leerToken(req));
+      return res.status(204).end();
+    },
+  };
+}
