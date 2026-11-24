@@ -4,25 +4,32 @@ import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { Home } from './pages/Home';
 import { ConsultaJuridica } from './pages/ConsultaJuridica';
-import './App.css';
 import { ConsultasRecibidas } from './pages/ConsultasRecibidas';
+import { Login } from './pages/Login';
+import { Register } from './pages/Register';
+import { AuthProvider } from './context/AuthContext';
+import './App.css';
 
 function App() {
   return (
     <Router>
-      <div className="app-container">
-        <Navbar />
-        
-        <main className="main-content">
-          <Routes>
-            <Route path="/consultas" element={<ConsultasRecibidas />} />
-            <Route path="/" element={<Home />} />
-            <Route path="/consulta-juridica" element={<ConsultaJuridica />} />
-          </Routes>
-        </main>
+      <AuthProvider>
+        <div className="app-container">
+          <Navbar />
 
-        <Footer />
-      </div>
+          <main className="main-content">
+            <Routes>
+              <Route path="/consultas" element={<ConsultasRecibidas />} />
+              <Route path="/" element={<Home />} />
+              <Route path="/consulta-juridica" element={<ConsultaJuridica />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+            </Routes>
+          </main>
+
+          <Footer />
+        </div>
+      </AuthProvider>
     </Router>
   );
 }
