@@ -1,9 +1,13 @@
 import { Router } from 'express';
-import { registerUser, loginUser } from '../controllers/auth.controller';
+import { crearControladorAuth } from '../controllers/auth.controller';
+import type { ServicioAuth } from '../services/auth.service';
 
-const router = Router();
-
-router.post('/register', registerUser);
-router.post('/login', loginUser);
-
-export default router;
+export function crearRouterAuth(servicio: ServicioAuth) {
+  const router = Router();
+  const controlador = crearControladorAuth(servicio);
+  router.post('/register', controlador.registerUser);
+  router.post('/login', controlador.loginUser);
+  router.get('/me', controlador.me);
+  router.post('/logout', controlador.logoutUser);
+  return router;
+}
