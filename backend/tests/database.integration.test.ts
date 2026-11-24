@@ -6,7 +6,7 @@ import type { QueryInterface } from 'sequelize';
 import { MigrationError } from 'umzug';
 import { leerConfiguracionPostgres } from '../config/database.config';
 import { crearConexionPostgres } from '../database/connection';
-import { crearMigrador, describirErrorPostgres, migracionInicial } from '../database/migrate';
+import { crearMigrador, describirErrorPostgres, migracionInicial, migracionUsuarios } from '../database/migrate';
 import { definirConsulta } from '../models/consulta.model';
 import { consultaFicticia } from './helpers/fixtures';
 import { comprobarDestinoDescartable, ejecutarCli } from './helpers/postgres';
@@ -53,8 +53,9 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
     });
 
     await t.test('la CLI aplica la migración sobre una base sin tablas de negocio', async () => {
-      assert.match(ejecutarCli('up'), /Migraciones aplicadas: 001-crear-consultas/);
-      assert.deepEqual(await migrador.query('SELECT name FROM app."SequelizeMeta"', { type: QueryTypes.SELECT }), [{ name: migracionInicial }]);
+      assert.match(ejecutarCli('up'), /Migraciones aplicadas: 001-crear-consultas, 002-crear-usuarios/);
+      assert.deepEqual(await migrador.query('SELECT name FROM app."SequelizeMeta" ORDER BY name', { type: QueryTypes.SELECT }),
+        [{ name: migracionInicial }, { name: migracionUsuarios }]);
       assert.deepEqual(await migrador.query('SELECT * FROM app.consultas', { type: QueryTypes.SELECT }), []);
     });
 
@@ -76,9 +77,10 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
     await t.test('segunda ejecución y consulta del historial no duplican cambios', async () => {
       assert.equal(ejecutarCli('up'), 'Sin migraciones pendientes.');
       const estado = JSON.parse(ejecutarCli('status'));
-      assert.deepEqual(estado.ejecutadas.map((m: { name: string }) => m.name), [migracionInicial]);
+      assert.deepEqual(estado.ejecutadas.map((m: { name: string }) => m.name), [migracionInicial, migracionUsuarios]);
       assert.deepEqual(estado.pendientes, []);
-      assert.deepEqual(await migrador.query('SELECT name FROM app."SequelizeMeta"', { type: QueryTypes.SELECT }), [{ name: migracionInicial }]);
+      assert.deepEqual(await migrador.query('SELECT name FROM app."SequelizeMeta" ORDER BY name', { type: QueryTypes.SELECT }),
+        [{ name: migracionInicial }, { name: migracionUsuarios }]);
     });
 
     await t.test('aplicación crea y lee con el modelo sin cambiar textos ni imponer unicidad de contacto', async () => {
@@ -99,6 +101,7 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
     await t.test('aplicación sin DDL, UPDATE/DELETE ni acceso al historial; migrador dueño de los objetos', async () => {
       for (const sql of [
         "UPDATE app.consultas SET nombre = 'Cambio ficticio'", 'DELETE FROM app.consultas',
+        "UPDATE app.usuarios SET nombre = 'Cambio ficticio'", 'DELETE FROM app.usuarios',
         'CREATE TABLE app.no_permitida (id integer)', 'SELECT * FROM app."SequelizeMeta"',
         'INSERT INTO app."SequelizeMeta" (name) VALUES (\'no_permitida\')', 'DELETE FROM app."SequelizeMeta"',
       ]) {
@@ -116,6 +119,7 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
       assert.deepEqual(propietarios, [
         { tablename: 'SequelizeMeta', tableowner: 'docker_laws_migrator' },
         { tablename: 'consultas', tableowner: 'docker_laws_migrator' },
+        { tablename: 'usuarios', tableowner: 'docker_laws_migrator' },
       ]);
     });
   } finally {
