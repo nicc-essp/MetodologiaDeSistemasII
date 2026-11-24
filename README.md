@@ -131,6 +131,8 @@ La migración se ejecuta desde el host con el rol migrador. El backend del conte
 
 #### 3. Construir e iniciar la aplicación
 
+Sin el paso 2, Compose no tiene `secrets/postgres/*.txt` (están fuera de Git) y el contenedor de PostgreSQL no arranca.
+
 ```powershell
 docker compose up --build
 ```
