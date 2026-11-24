@@ -5,12 +5,20 @@ import healthRouter from './routes/health.routes';
 import { crearRouterFormularios } from './routes/formulario.routes';
 import { crearAlmacenFormularios } from './data/formularios-guardados';
 import type { AlmacenFormularios } from './data/formularios-guardados';
+import { crearAlmacenCuentas } from './data/cuentas-guardadas';
+import type { AlmacenCuentas } from './data/cuentas-guardadas';
 import { manejarErrores } from './middleware/error.middleware';
 import { parsearOrigenes } from './config/app.config';
-import authRouter from './routes/auth.routes';
+import { crearRouterAuth } from './routes/auth.routes';
+import { crearServicioAuth } from './services/auth.service';
 
-export function createApp({ almacen = crearAlmacenFormularios(), allowedOrigins = parsearOrigenes() }: {
+export function createApp({
+  almacen = crearAlmacenFormularios(),
+  cuentas = crearAlmacenCuentas(),
+  allowedOrigins = parsearOrigenes(),
+}: {
   almacen?: AlmacenFormularios;
+  cuentas?: AlmacenCuentas;
   allowedOrigins?: string[];
 } = {}) {
   const app = express();
@@ -22,7 +30,7 @@ export function createApp({ almacen = crearAlmacenFormularios(), allowedOrigins 
   } }));
   app.use('/health', healthRouter);
   app.use('/formulario', crearRouterFormularios(almacen));
-  app.use('/auth', authRouter);
+  app.use('/auth', crearRouterAuth(crearServicioAuth(cuentas)));
   app.use(manejarErrores);
   return app;
 }
