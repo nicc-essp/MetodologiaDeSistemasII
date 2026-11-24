@@ -8,6 +8,7 @@ import { parsearOrigenes } from './config/app.config';
 import { leerConfiguracionPostgres } from './config/database.config';
 import { crearConexionPostgres } from './database/connection';
 import { prepararAlmacenPostgres } from './data/formularios-postgres';
+import { prepararAlmacenCuentasPostgres } from './data/cuentas-postgres';
 
 export async function iniciarServidor({ env = process.env, puerto = 3001, host = '0.0.0.0' }: {
   env?: NodeJS.ProcessEnv; puerto?: number; host?: string;
@@ -22,7 +23,9 @@ export async function iniciarServidor({ env = process.env, puerto = 3001, host =
     await conexion.authenticate();
     etapa = 'comprobar el esquema y los permisos de consultas (ejecutá db:migrate explícitamente)';
     const almacen = await prepararAlmacenPostgres(conexion);
-    const servidor = createServer(createApp({ almacen, allowedOrigins }));
+    etapa = 'comprobar el esquema y los permisos de cuentas (ejecutá db:migrate explícitamente)';
+    const cuentas = await prepararAlmacenCuentasPostgres(conexion);
+    const servidor = createServer(createApp({ almacen, cuentas, allowedOrigins }));
     etapa = 'abrir el puerto HTTP';
     await new Promise<void>((resolve, reject) => {
       servidor.once('error', reject);
