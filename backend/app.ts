@@ -7,6 +7,7 @@ import { crearAlmacenFormularios } from './data/formularios-guardados';
 import type { AlmacenFormularios } from './data/formularios-guardados';
 import { manejarErrores } from './middleware/error.middleware';
 import { parsearOrigenes } from './config/app.config';
+import authRouter from './routes/auth.routes';
 
 export function createApp({ almacen = crearAlmacenFormularios(), allowedOrigins = parsearOrigenes() }: {
   almacen?: AlmacenFormularios;
@@ -21,6 +22,7 @@ export function createApp({ almacen = crearAlmacenFormularios(), allowedOrigins 
   } }));
   app.use('/health', healthRouter);
   app.use('/formulario', crearRouterFormularios(almacen));
+  app.use('/auth', authRouter);
   app.use(manejarErrores);
   return app;
 }
