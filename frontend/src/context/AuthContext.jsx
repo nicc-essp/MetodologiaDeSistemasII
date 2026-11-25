@@ -1,12 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   cerrarSesion,
   iniciarSesion,
   obtenerUsuarioActual,
   registrarCuenta,
 } from '../services/authService';
-
-const AuthContext = createContext(null);
+import { AuthContext } from './useAuth';
 
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
@@ -53,10 +52,4 @@ export function AuthProvider({ children }) {
   }), [usuario, cargando]);
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const contexto = useContext(AuthContext);
-  if (!contexto) throw new Error('useAuth requiere AuthProvider');
-  return contexto;
 }

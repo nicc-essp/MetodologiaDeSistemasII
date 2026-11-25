@@ -8,7 +8,7 @@ function responderError(res: Response, error: unknown): Response {
   if (error instanceof ErrorCuenta) {
     return res.status(error.status).json({ message: error.message });
   }
-  return res.status(400).json({ message: 'Error al procesar la cuenta' });
+  throw new Error('Error interno al procesar la cuenta', { cause: error });
 }
 
 export function crearControladorAuth(servicio: ServicioAuth) {
