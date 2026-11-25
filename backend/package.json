@@ -5,7 +5,7 @@
   "main": "index.ts",
   "scripts": {
     "start": "node --env-file-if-exists=../.env --import tsx index.ts",
-    "test": "node --import tsx --test tests/formulario.validation.test.ts tests/formularios-guardados.test.ts tests/formulario.http.test.ts tests/app.test.ts tests/app.config.test.ts tests/typecheck.test.ts tests/database.test.ts tests/database.supabase.test.ts tests/auth.http.test.ts",
+    "test": "node --import tsx --test tests/formulario.validation.test.ts tests/formularios-guardados.test.ts tests/formulario.http.test.ts tests/app.test.ts tests/app.config.test.ts tests/typecheck.test.ts tests/database.test.ts tests/database.supabase.test.ts tests/auth.http.test.ts tests/auth.seguridad.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "db:migrate": "node --env-file-if-exists=../.env --import tsx database/migrate.ts up",
     "db:status": "node --env-file-if-exists=../.env --import tsx database/migrate.ts status",

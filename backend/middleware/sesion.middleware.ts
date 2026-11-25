@@ -9,9 +9,19 @@ export function leerToken(req: Request): string | undefined {
   return token || undefined;
 }
 
+export function protegerTransporteCuenta(exigirHttps: boolean): RequestHandler {
+  return (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    if (exigirHttps && !req.secure) {
+      res.status(403).json({ message: 'Esta operación requiere HTTPS' });
+      return;
+    }
+    next();
+  };
+}
+
 export function exigirLecturaConsultas(servicio: ServicioAuth): RequestHandler {
   return async (req, res, next) => {
-    res.set('Cache-Control', 'no-store');
     let usuario;
     try {
       usuario = await servicio.usuarioDeToken(leerToken(req));

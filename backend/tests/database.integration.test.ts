@@ -13,6 +13,7 @@ import { definirConsulta } from '../models/consulta.model';
 import { consultaFicticia } from './helpers/fixtures';
 import { comprobarDestinoDescartable, ejecutarAltaRepresentante, ejecutarCli } from './helpers/postgres';
 import { autenticarRepresentante, datosRepresentanteFicticio } from './helpers/auth';
+import type { SesionIniciada } from '../services/auth.service';
 
 test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos reales', { timeout: 90000 }, async t => {
   comprobarDestinoDescartable();
@@ -148,6 +149,28 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
       });
     });
 
+    await t.test('el arranque rechaza un UNIQUE ausente y un CHECK de tipo demasiado permisivo', async () => {
+      const esperarRechazo = async () => assert.rejects(async () => {
+        const inesperado = await iniciarServidor(opcionesServidor);
+        await inesperado.cerrar();
+      }, /comprobar el esquema y los permisos de cuentas/);
+
+      await migrador.query('ALTER TABLE app.usuarios DROP CONSTRAINT usuarios_email_key');
+      try {
+        await esperarRechazo();
+      } finally {
+        await migrador.query('ALTER TABLE app.usuarios ADD CONSTRAINT usuarios_email_key UNIQUE (email)');
+      }
+      await migrador.query('ALTER TABLE app.usuarios DROP CONSTRAINT usuarios_tipo_check');
+      try {
+        await migrador.query("ALTER TABLE app.usuarios ADD CONSTRAINT usuarios_tipo_check CHECK (tipo <> '')");
+        await esperarRechazo();
+      } finally {
+        await migrador.query('ALTER TABLE app.usuarios DROP CONSTRAINT IF EXISTS usuarios_tipo_check');
+        await migrador.query("ALTER TABLE app.usuarios ADD CONSTRAINT usuarios_tipo_check CHECK (tipo IN ('cliente', 'representante'))");
+      }
+    });
+
     await t.test('Express arranca con el rol de aplicación, recupera la consulta previa y persiste cuentas', async () => {
       const preparacion = ejecutarAltaRepresentante(datosRepresentanteFicticio);
       assert.ifError(preparacion.error);
@@ -189,9 +212,9 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
         }, usuario]);
         const login = await enviar('/login', credenciales);
         assert.equal(login.status, 200);
-        const sesion: unknown = await login.json();
-        assert.ok(sesion && typeof sesion === 'object' && 'usuario' in sesion);
-        assert.deepEqual(sesion.usuario, { ...usuario, puedeLeerConsultas: false });
+        const sesion = await login.json() as SesionIniciada;
+        assert.ok(Number.isSafeInteger(sesion.usuario.expiraEn) && sesion.usuario.expiraEn > Date.now());
+        assert.deepEqual(sesion.usuario, { ...usuario, puedeLeerConsultas: false, expiraEn: sesion.usuario.expiraEn });
       } finally {
         await servicio.cerrar();
       }

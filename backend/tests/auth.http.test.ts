@@ -8,6 +8,7 @@ import { crearAlmacenFormularios } from '../data/formularios-guardados';
 import { withHttp } from './helpers/http';
 import { consultaFicticia } from './helpers/fixtures';
 import { encabezadosBearer, iniciarSesionFicticia, representanteEnMemoria, representanteFicticio } from './helpers/auth';
+import type { SesionIniciada } from '../services/auth.service';
 
 const registro = {
   nombre: 'Cuenta ficticia',
@@ -43,13 +44,17 @@ async function registrarCuenta(base: string, datos = registro) {
 }
 
 async function iniciarSesion(base: string) {
+  const antes = Date.now();
   const respuesta = await solicitar(base, '/login', { method: 'POST', datos: credenciales });
   assert.equal(respuesta.status, 200);
-  const sesion: unknown = await respuesta.json();
-  assert.ok(sesion && typeof sesion === 'object' && 'token' in sesion);
+  assert.equal(respuesta.headers.get('cache-control'), 'no-store');
+  const sesion = await respuesta.json() as SesionIniciada;
   assert.ok(typeof sesion.token === 'string' && sesion.token.length > 0);
-  assert.deepEqual(sesion, { token: sesion.token, usuario: perfilCliente });
-  return sesion.token;
+  const { expiraEn } = sesion.usuario;
+  const duracion = 8 * 60 * 60 * 1000;
+  assert.ok(Number.isSafeInteger(expiraEn) && expiraEn >= antes + duracion && expiraEn <= Date.now() + duracion);
+  assert.deepEqual(sesion, { token: sesion.token, usuario: { ...perfilCliente, expiraEn } });
+  return sesion;
 }
 
 test('registro HTTP guarda un hash verificable y responde únicamente con el perfil público', async () => {
@@ -104,8 +109,10 @@ test('registro HTTP devuelve 409 por un correo duplicado y preserva la cuenta or
 test('credenciales correctas permiten consultar el perfil sin exponer hash ni contraseña', async () => {
   await withHttp(createApp(), async base => {
     await registrarCuenta(base);
-    const token = await iniciarSesion(base);
-    await comprobarRespuesta(await solicitar(base, '/me', { token }), 200, perfilCliente);
+    const { token, usuario } = await iniciarSesion(base);
+    const perfil = await solicitar(base, '/me', { token });
+    assert.equal(perfil.headers.get('cache-control'), 'no-store');
+    await comprobarRespuesta(perfil, 200, usuario);
   });
 });
 
@@ -125,6 +132,10 @@ for (const [caso, datos] of [
 for (const [caso, password, message] of [
   ['contraseña ausente', undefined, 'Faltan campos obligatorios'],
   ['contraseña de tipo inválido', 42, 'Los campos de la cuenta deben ser texto'],
+  ['contraseña de siete caracteres', 'abcdefg', 'La contraseña debe tener al menos 8 caracteres'],
+  ['contraseña en blanco', '        ', 'Faltan campos obligatorios'],
+  ['contraseña con NUL', 'ficticia\u0000', 'Los campos de la cuenta contienen caracteres no válidos'],
+  ['contraseña con Unicode inválido', 'ficticia\uD800', 'Los campos de la cuenta contienen caracteres no válidos'],
 ] as const) {
   test(`login HTTP rechaza ${caso} antes de consultar el almacén`, async t => {
     const almacen = crearAlmacenCuentas();
@@ -136,6 +147,29 @@ for (const [caso, password, message] of [
       await comprobarRespuesta(respuesta, 400, { message });
     });
     assert.equal(buscarPorEmail.mock.callCount(), 0);
+  });
+}
+
+for (const [caso, alLimite] of [
+  ['ASCII', 'a'.repeat(72)],
+  ['acentos', 'é'.repeat(36)],
+  ['emoji', '🔑'.repeat(18)],
+] as const) {
+  test(`registro y login aceptan 72 bytes en ${caso} y rechazan 73 antes del almacén`, async t => {
+    const cuentas = crearAlmacenCuentas();
+    const crear = t.mock.fn(cuentas.crear);
+    const buscarPorEmail = t.mock.fn(cuentas.buscarPorEmail);
+    await withHttp(createApp({ cuentas: { ...cuentas, crear, buscarPorEmail } }), async base => {
+      await registrarCuenta(base, { ...registro, password: alLimite });
+      const login = await solicitar(base, '/login', { method: 'POST', datos: { ...credenciales, password: alLimite } });
+      assert.equal(login.status, 200);
+      const datos = { ...registro, password: alLimite + 'a' };
+      const esperado = { message: 'La contraseña no puede superar los 72 bytes en UTF-8' };
+      await comprobarRespuesta(await solicitar(base, '/register', { method: 'POST', datos }), 400, esperado);
+      await comprobarRespuesta(await solicitar(base, '/login', { method: 'POST', datos }), 400, esperado);
+    });
+    assert.equal(crear.mock.callCount(), 1);
+    assert.equal(buscarPorEmail.mock.callCount(), 1);
   });
 }
 
@@ -159,10 +193,11 @@ test('el token es válido justo antes de su vencimiento y se rechaza al alcanzar
     const vencimiento = inicio + 8 * 60 * 60 * 1000;
     let ahora = inicio;
     t.mock.method(Date, 'now', () => ahora);
-    const token = await iniciarSesion(base);
+    const { token, usuario } = await iniciarSesion(base);
+    assert.equal(usuario.expiraEn, vencimiento);
 
     ahora = vencimiento - 1;
-    await comprobarRespuesta(await solicitar(base, '/me', { token }), 200, perfilCliente);
+    await comprobarRespuesta(await solicitar(base, '/me', { token }), 200, usuario);
 
     ahora = vencimiento;
     await comprobarRespuesta(await solicitar(base, '/me', { token }), 401, sinSesion);
@@ -172,11 +207,12 @@ test('el token es válido justo antes de su vencimiento y se rechaza al alcanzar
 test('logout responde 204 y el token deja de servir para consultar el perfil', async () => {
   await withHttp(createApp(), async base => {
     await registrarCuenta(base);
-    const token = await iniciarSesion(base);
-    await comprobarRespuesta(await solicitar(base, '/me', { token }), 200, perfilCliente);
+    const { token, usuario } = await iniciarSesion(base);
+    await comprobarRespuesta(await solicitar(base, '/me', { token }), 200, usuario);
 
     const logout = await solicitar(base, '/logout', { method: 'POST', token });
     assert.equal(logout.status, 204);
+    assert.equal(logout.headers.get('cache-control'), 'no-store');
     assert.equal(await logout.text(), '');
     await comprobarRespuesta(await solicitar(base, '/me', { token }), 401, sinSesion);
   });
@@ -208,7 +244,7 @@ test('perfil HTTP responde 500 seguro si falla la lectura de una cuenta con sesi
   const cuentas = { ...crearAlmacenCuentas(), buscarPorId: async () => falloPersistencia() };
   await withHttp(createApp({ cuentas }), async base => {
     await registrarCuenta(base);
-    const token = await iniciarSesion(base);
+    const { token } = await iniciarSesion(base);
     await comprobarRespuesta(await solicitar(base, '/me', { token }), 500, errorSeguro);
   });
 });
@@ -246,7 +282,7 @@ test('dos clientes reciben 403 aunque un ID coincida con la lista o el correo co
     await registrarCuenta(base);
     const otro = await solicitar(base, '/register', { method: 'POST', datos });
     await comprobarRespuesta(otro, 201, { id: 2, nombre: datos.nombre, email: datos.email, tipo: 'cliente' });
-    const primera = await iniciarSesion(base);
+    const { token: primera } = await iniciarSesion(base);
     const segunda = await iniciarSesionFicticia(base, datos);
     assert.equal(segunda.usuario.puedeLeerConsultas, false);
     await comprobarLecturasDenegadas(base, 403, encabezadosBearer(primera));
@@ -289,6 +325,7 @@ test('el representante habilitado recibe permiso en login y perfil y puede leer 
       email: representanteFicticio.email,
       tipo: 'representante',
       puedeLeerConsultas: true,
+      expiraEn: usuario.expiraEn,
     });
     await comprobarRespuesta(await solicitar(base, '/me', { token }), 200, usuario);
     const headers = encabezadosBearer(token);

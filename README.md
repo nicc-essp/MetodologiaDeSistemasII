@@ -8,7 +8,7 @@ El proyecto busca ofrecer información sobre los servicios del estudio y permiti
 
 El formulario público permite enviar consultas jurídicas, que el backend guarda en PostgreSQL mediante Sequelize. En la demostración académica, solo los representantes habilitados pueden ver las consultas recibidas. La persistencia de formularios se verificó localmente y en un proyecto Supabase de desarrollo durante P04.4b; la autorización de INC-04 se verifica por separado en local.
 
-El proyecto se encuentra en desarrollo. **P01–P04 están completadas y aprobadas para el incremento inicial de persistencia de consultas**: P01/P02 por su auditoría formal independiente, P03 por su revisión de infraestructura y P04 por sus hitos local y Supabase de desarrollo. P04.4b fue validada y aprobada por Homero el 18 de noviembre de 2026. El registro, las sesiones y la autorización para la demostración se documentan en el [plan de seguridad y despliegue](docs/PLAN-SEGURIDAD-DESPLIEGUE.md). El endurecimiento de cuentas y sesiones, el seguimiento de casos y el despliegue público siguen pendientes.
+El proyecto se encuentra en desarrollo. **P01–P04 están completadas y aprobadas para el incremento inicial de persistencia de consultas**: P01/P02 por su auditoría formal independiente, P03 por su revisión de infraestructura y P04 por sus hitos local y Supabase de desarrollo. P04.4b fue validada y aprobada por Homero el 18 de noviembre de 2026. El registro, las sesiones acotadas y la autorización para la demostración se documentan en el [plan de seguridad y despliegue](docs/PLAN-SEGURIDAD-DESPLIEGUE.md). El seguimiento de casos y el despliegue público siguen pendientes.
 
 ## Estado actual
 
@@ -243,11 +243,13 @@ Las comprobaciones HTTP del apartado anterior también aplican aquí. Para deten
 
 ## Cuentas y acceso a consultas
 
-`POST /auth/register` crea cuentas `cliente`. Se puede omitir `tipo` o enviar `cliente`; solicitar otro tipo recibe `400`. `POST /auth/login` devuelve un token Bearer y el perfil de la sesión, `GET /auth/me` devuelve ese perfil con un token vigente y `POST /auth/logout` revoca el token enviado. El perfil de sesión incluye `puedeLeerConsultas`, calculado por el backend.
+`POST /auth/register` crea cuentas `cliente`. Se puede omitir `tipo` o enviar `cliente`. Solicitar otro tipo recibe `400`. `POST /auth/login` devuelve un token Bearer y el perfil de la sesión. `GET /auth/me` devuelve ese perfil con un token vigente y `POST /auth/logout` revoca el token enviado. El perfil de sesión incluye `puedeLeerConsultas` y `expiraEn` en milisegundos Unix.
+
+El registro y el login exigen una contraseña válida de al menos ocho caracteres y como máximo 72 bytes UTF-8. Las sesiones vencen a las ocho horas y un reinicio de Express requiere volver a ingresar. Login, registro y envío de consultas tienen límites por IP y por proceso. Al alcanzar un límite, la API indica `429` y el tiempo restante en el encabezado `Retry-After`. [Límites y transporte para la demostración](docs/PLAN-SEGURIDAD-DESPLIEGUE.md#sesiones-abuso-y-transporte-en-inc-05)
 
 La lectura requiere una sesión vigente, el rol `representante` y un ID habilitado en `AUTH_REPRESENTANTES_IDS`. La variable se configura solo en el backend y queda vacía por defecto. Una lista inválida impide el arranque. Para configurar los IDs y preparar cuentas ficticias, seguir el [procedimiento de alta privada](backend/database/README.md#alta-privada-de-un-representante-ficticio).
 
-El acceso a toda la colección es una decisión deliberada para la **demostración académica con datos exclusivamente ficticios**. Un entorno productivo con datos reales requiere reglas de pertenencia y permisos por registro. La publicación de la demostración queda condicionada al endurecimiento de INC-05 y a las verificaciones previas documentadas en el [plan de despliegue](docs/PLAN-SEGURIDAD-DESPLIEGUE.md).
+El acceso a toda la colección es una decisión deliberada para la **demostración académica con datos exclusivamente ficticios**. Un entorno productivo con datos reales requiere reglas de pertenencia y permisos por registro. Antes de publicar la demostración se debe comprobar el proxy y HTTPS de la plataforma, la configuración del destino y el flujo de regresión. [Plan de despliegue](docs/PLAN-SEGURIDAD-DESPLIEGUE.md)
 
 ## API de formularios
 

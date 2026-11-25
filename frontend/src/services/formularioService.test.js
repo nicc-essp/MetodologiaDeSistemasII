@@ -34,6 +34,13 @@ it.each([[401, 'sesion'], [403, 'permiso']])('distingue HTTP %i al consultar un 
   await expect(obtenerFormulario(1)).rejects.toMatchObject({ categoria, message: '' });
 });
 
+it('comunica el límite de envíos con un mensaje propio', async () => {
+  fetch.mockResolvedValueOnce(respuestaJson({ message: 'detalle interno ficticio' }, 429));
+  const error = await crearFormulario(consultaFicticia).catch(error => error);
+  expect(obtenerMensajeError(error, 'envio')).toBe('Alcanzaste el límite de envíos. Esperá e intentá nuevamente.');
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
 describe('respuestas incompatibles no son éxito', () => {
   it.each([
     null, {}, [], { ...formularioFicticio, id: 0 }, { ...formularioFicticio, id: '1' },

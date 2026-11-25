@@ -9,6 +9,7 @@ const mensajesSeguros = new Set([
   'El correo electrónico no tiene un formato válido',
   'El tipo de cuenta no es válido',
   'La contraseña debe tener al menos 8 caracteres',
+  'La contraseña no puede superar los 72 bytes en UTF-8',
   'El correo electrónico ya está registrado',
   'Credenciales inválidas',
   'No hay una sesión activa',
@@ -39,7 +40,11 @@ function esUsuario(valor) {
 
 function esSesion(valor) {
   return valor !== null && typeof valor === 'object' && typeof valor.token === 'string'
-    && valor.token.length > 0 && esUsuario(valor.usuario);
+    && valor.token.length > 0 && esPerfilDeSesion(valor.usuario);
+}
+
+function esPerfilDeSesion(valor) {
+  return esUsuario(valor) && Number.isSafeInteger(valor.expiraEn) && valor.expiraEn > Date.now();
 }
 
 export function leerToken() {
@@ -62,6 +67,7 @@ async function solicitar(url, options, estadoEsperado) {
   } catch {
     throw new ErrorCuenta('red');
   }
+  if (response.status === 429) throw new ErrorCuenta('limite');
   if (response.status >= 500) throw new ErrorCuenta('servidor');
   if (estadoEsperado === 204) {
     if (response.status !== 204) throw new ErrorCuenta(response.status >= 400 ? 'validacion' : 'protocolo');
@@ -82,14 +88,17 @@ async function solicitar(url, options, estadoEsperado) {
 }
 
 export function obtenerMensajeErrorCuenta(error, operacion) {
+  if (operacion === 'salida') return 'Sesión cerrada en este navegador. No se pudo confirmar su revocación en el servidor.';
   if (error instanceof ErrorCuenta && error.categoria === 'configuracion') {
     return 'La conexión con el servidor no está configurada correctamente.';
   }
   if (error instanceof ErrorCuenta && error.categoria === 'validacion') {
     return error.message || 'Revise los datos de la cuenta e intente nuevamente.';
   }
+  if (error instanceof ErrorCuenta && error.categoria === 'limite') {
+    return 'Alcanzaste el límite de solicitudes. Esperá e intentá nuevamente.';
+  }
   if (operacion === 'sesion') return 'No se pudo comprobar la sesión. Intente nuevamente.';
-  if (operacion === 'salida') return 'No se pudo cerrar la sesión. Intente nuevamente.';
   return 'No se pudo completar el acceso. Intente nuevamente.';
 }
 
@@ -120,11 +129,15 @@ export async function obtenerUsuarioActual() {
   if (!token) return null;
   try {
     const usuario = await solicitar(urlAuth('/me'), { headers: encabezadosAuth() }, 200);
-    if (!esUsuario(usuario)) throw new ErrorCuenta('protocolo');
+    if (leerToken() !== token) return null;
+    if (!esPerfilDeSesion(usuario)) {
+      borrarToken();
+      throw new ErrorCuenta('protocolo');
+    }
     return usuario;
   } catch (error) {
     if (error instanceof ErrorCuenta && error.categoria === 'validacion') {
-      borrarToken();
+      if (leerToken() === token) borrarToken();
       return null;
     }
     throw error;
@@ -132,9 +145,8 @@ export async function obtenerUsuarioActual() {
 }
 
 export async function cerrarSesion() {
-  const token = leerToken();
-  if (token) {
-    await solicitar(urlAuth('/logout'), { method: 'POST', headers: encabezadosAuth() }, 204);
-  }
+  if (!leerToken()) return;
+  const headers = encabezadosAuth();
   borrarToken();
+  await solicitar(urlAuth('/logout'), { method: 'POST', headers }, 204);
 }

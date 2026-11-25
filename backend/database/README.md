@@ -86,6 +86,8 @@ Ejecutar un solo runner a la vez. La transacción de la migración protege su DD
 
 La revisión que incorpora cuentas prepara los almacenes de consultas y usuarios antes de abrir HTTP. Una base con solo `001-crear-consultas` requiere aplicar explícitamente `002-crear-usuarios` antes de arrancar ese backend. `002` agrega `app.usuarios` y su secuencia en una transacción. Se conservan `app.consultas`, sus permisos y el registro de `001`. El rol migrador posee los objetos nuevos. El rol de aplicación recibe `SELECT` e `INSERT` sobre usuarios y `USAGE` sobre su secuencia, y conserva la separación respecto del historial.
 
+El arranque de INC-05 comprueba en el catálogo PostgreSQL que `UNIQUE(email)` tenga un índice válido y que `usuarios_tipo_check` restrinja el tipo a `cliente` o `representante`, tal como define `002`. Usa el rol de aplicación y consultas de solo lectura. Una discrepancia impide abrir HTTP. Para diagnosticarla, revisar el historial y el esquema con el procedimiento de recuperación de esta guía.
+
 1. En el destino local acordado, verificar la revisión que se desea arrancar, la configuración de conexión y el respaldo cuando corresponda. Antes de migrar, revisar que el historial contenga `001`, que `app.usuarios` y su secuencia no estén creadas, y registrar el conteo de consultas. Hacer la comprobación con un solo migrador y una terminal con configuración local.
 2. Ejecutar los siguientes comandos desde la raíz, uno por uno. Continuar solo si el paso anterior terminó correctamente. En el estado esperado, la CLI aplica únicamente `002-crear-usuarios`.
 

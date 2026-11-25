@@ -26,7 +26,10 @@ export async function iniciarServidor({ env = process.env, puerto = 3001, host =
     const almacen = await prepararAlmacenPostgres(conexion);
     etapa = 'comprobar el esquema y los permisos de cuentas (ejecutá db:migrate explícitamente)';
     const cuentas = await prepararAlmacenCuentasPostgres(conexion);
-    const servidor = createServer(createApp({ almacen, cuentas, allowedOrigins, representantesHabilitados }));
+    const servidor = createServer(createApp({
+      almacen, cuentas, allowedOrigins, representantesHabilitados,
+      exigirHttpsCuentas: env.NODE_ENV === 'production',
+    }));
     etapa = 'abrir el puerto HTTP';
     await new Promise<void>((resolve, reject) => {
       servidor.once('error', reject);

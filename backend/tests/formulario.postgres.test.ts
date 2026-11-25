@@ -18,6 +18,8 @@ import { autenticarRepresentante, datosRepresentanteFicticio, encabezadosBearer,
 
 test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y cierre', { timeout: 90000 }, async t => {
   comprobarDestinoDescartable();
+  let ahora = Date.now();
+  t.mock.method(Date, 'now', () => ahora);
   const env = { ...process.env, CORS_ORIGINS: 'http://localhost:5173', AUTH_REPRESENTANTES_IDS: '' };
   const migrador = crearConexionPostgres(leerConfiguracionPostgres('migrador', env));
   let servicio: Awaited<ReturnType<typeof iniciarServidor>> | undefined;
@@ -94,6 +96,27 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
       assert.equal(response.headers.get('access-control-allow-origin'), 'http://localhost:5173');
     });
 
+    await t.test('el arranque en producción requiere HTTPS para iniciar sesión', async () => {
+      const produccion = await iniciarServidor({
+        env: { ...env, NODE_ENV: 'production' }, puerto: 0, host: '127.0.0.1',
+      });
+      try {
+        const { port } = produccion.servidor.address() as AddressInfo;
+        const base = `http://127.0.0.1:${port}`;
+        assert.equal((await fetch(`${base}/health`)).status, 200);
+        const login = await fetch(`${base}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
+          body: JSON.stringify({ email: datosRepresentanteFicticio.email, password: datosRepresentanteFicticio.password }),
+        });
+        assert.equal(login.status, 403);
+        assert.equal(login.headers.get('cache-control'), 'no-store');
+        assert.deepEqual(await login.json(), { message: 'Esta operación requiere HTTPS' });
+      } finally {
+        await produccion.cerrar();
+      }
+    });
+
     let primero: Formulario;
     await t.test('POST conserva textos, ignora id/extras y devuelve un objeto público', async () => {
       const datos = { ...consultaFicticia, nombre: '  Persona 😀 ficticia  ', mensaje: "  Texto ⚖️ cafe\u0301\nD'Prueba\r\n  " };
@@ -134,6 +157,8 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
       const antes = await listar();
       const secuenciaAntes = await migrador.query('SELECT last_value FROM app.consultas_id_seq', { type: QueryTypes.SELECT });
       for (const campo of Object.keys(consultaFicticia)) {
+        // Ventanas separadas para comprobar todas las variantes con los límites reales.
+        ahora += 10 * 60 * 1000;
         for (const invalido of ['\u0000', '\uD800', '\uDFFF', '\uD800\uD800', '\uDFFF\uDFFF']) {
           const response = await enviar({ ...consultaFicticia, [campo]: `texto${invalido}` });
           assert.equal(response.status, 400);

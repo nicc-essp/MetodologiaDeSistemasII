@@ -40,29 +40,50 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const valor = useMemo(() => ({
-    usuario,
-    cargando,
-    rechazarLectura,
-    async entrar(datos) {
+  useEffect(() => {
+    if (!usuario) return;
+    const token = leerToken();
+    const expirar = () => rechazarLectura('sesion', token);
+    const comprobarVencimiento = () => {
+      if (Date.now() >= usuario.expiraEn) expirar();
+    };
+    const espera = Math.max(0, Math.min(2147483647, usuario.expiraEn - Date.now()));
+    const temporizador = setTimeout(expirar, espera);
+    window.addEventListener('focus', comprobarVencimiento);
+    document.addEventListener('visibilitychange', comprobarVencimiento);
+    return () => {
+      clearTimeout(temporizador);
+      window.removeEventListener('focus', comprobarVencimiento);
+      document.removeEventListener('visibilitychange', comprobarVencimiento);
+    };
+  }, [usuario, rechazarLectura]);
+
+  const valor = useMemo(() => {
+    async function entrar(datos) {
       const sesion = await iniciarSesion(datos);
       setUsuario(sesion.usuario);
       return sesion.usuario;
-    },
-    async registrar(datos) {
-      await registrarCuenta(datos);
-      const sesion = await iniciarSesion({ email: datos.email, password: datos.password });
-      setUsuario(sesion.usuario);
-      return sesion.usuario;
-    },
-    async salir() {
-      try {
-        await cerrarSesion();
-      } finally {
+    }
+
+    return {
+      usuario,
+      cargando,
+      rechazarLectura,
+      entrar,
+      async registrar(datos) {
+        await registrarCuenta(datos);
+        try {
+          return await entrar({ email: datos.email, password: datos.password });
+        } catch {
+          return null;
+        }
+      },
+      salir() {
         setUsuario(null);
-      }
-    },
-  }), [usuario, cargando, rechazarLectura]);
+        return cerrarSesion();
+      },
+    };
+  }, [usuario, cargando, rechazarLectura]);
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
 }

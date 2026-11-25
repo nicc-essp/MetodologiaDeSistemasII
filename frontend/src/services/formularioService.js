@@ -40,6 +40,7 @@ async function solicitar(url, options, estadoEsperado, listado = false) {
   } catch {
     throw new ErrorFormulario('red');
   }
+  if (response.status === 429) throw new ErrorFormulario('limite');
   if (response.status >= 500) throw new ErrorFormulario('servidor');
   if (estadoEsperado === 200 && response.status === 401) throw new ErrorFormulario('sesion');
   if (estadoEsperado === 200 && response.status === 403) throw new ErrorFormulario('permiso');
@@ -59,6 +60,9 @@ async function solicitar(url, options, estadoEsperado, listado = false) {
 }
 
 export function obtenerMensajeError(error, operacion) {
+  if (error instanceof ErrorFormulario && error.categoria === 'limite') {
+    return 'Alcanzaste el límite de envíos. Esperá e intentá nuevamente.';
+  }
   if (error instanceof ErrorFormulario && error.categoria === 'configuracion') {
     return 'La conexión con el servidor no está configurada correctamente.';
   }

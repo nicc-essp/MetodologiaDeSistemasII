@@ -54,12 +54,12 @@ El [alta privada de representantes ficticios](../backend/database/README.md#alta
 
 Express comprueba el permiso antes de buscar o listar datos y aplica `Cache-Control: no-store` a las respuestas de ambas lecturas. El login y el perfil de sesión incluyen `puedeLeerConsultas`. React muestra el menú y la vista con ese permiso, envía el token para las lecturas y descarta datos ante 401, 403 o fin de sesión.
 
-### Sesiones, abuso y transporte para INC-05
+### Sesiones, abuso y transporte en INC-05
 
-- Para una sola instancia de Render se propone conservar tokens opacos con sesiones acotadas en memoria, vencimiento, revocación y depuración comprobables. Un reinicio o despliegue exige ingresar otra vez. Si se necesita continuidad o más instancias, evaluar antes una tabla PostgreSQL de sesiones con huella del token, referencia al usuario, vencimiento y permisos mínimos. Cualquier persistencia de sesiones requiere aprobación con sus consecuencias.
-- Aplicar validaciones consistentes de alta/login y el límite UTF-8 de bcrypt. Acordar el tratamiento de cuentas anteriores, normalización de correo y respuesta a duplicados antes de alterar filas o unicidad.
-- Limitar intentos de login, alta y creación pública de consultas. Si se usa la IP detrás de Render, verificar los proxies de confianza y el origen de la dirección antes de fijar el límite. Probar los rechazos y que el tráfico legítimo mantiene su contrato.
-- Limpiar el token local y actualizar la interfaz al terminar una sesión. Ante fallo de red en logout, comunicar que la revocación remota puede no haberse confirmado. Usar HTTPS para tokens en entornos públicos, CORS por orígenes explícitos y respuestas de autenticación sin caché. Mantener credenciales, hashes y tokens fuera de logs y conservar la proyección pública de cuentas.
+- **Sesiones.** Para la demostración en una sola instancia se conservan tokens opacos en memoria. Vencen a las ocho horas y se depuran al emitir o comprobar sesiones. Se admiten hasta tres por cuenta y 256 por proceso. La cuarta sustituye a la más antigua de esa cuenta. Si el cupo global está lleno, un nuevo ingreso que requiere otra plaza recibe 503 y las sesiones activas conservan su acceso. Un reinicio o despliegue requiere volver a ingresar. La continuidad entre procesos necesitaría una decisión y una aprobación propias.
+- **Credenciales.** Alta, login y alta privada usan las mismas comprobaciones de correo y contraseña. Se recortan los bordes del correo, se conserva su capitalización y se rechazan contraseñas inválidas o de más de 72 bytes UTF-8 antes de consultar o escribir una cuenta. El login devuelve el mismo error para correo desconocido y contraseña incorrecta y ejecuta bcrypt con un hash sintético en el primer caso. El registro conserva 409 para duplicados, lo que permite deducir la existencia de una cuenta. Su frecuencia está acotada para la demostración. Ante una cuenta ficticia anterior cuya contraseña original superaba el límite, acordar su recuperación antes de usarla: el hash de bcrypt no permite recuperar la longitud original. Las cuentas anteriores quedan intactas y la habilitación de representantes mantiene las reglas de INC-04.
+- **Solicitudes.** Cada ruta tiene una ventana de diez minutos. Se admiten 10 intentos de login por IP y 120 por proceso, 5 registros por IP y 40 por proceso, y 20 envíos de consultas por IP y 120 por proceso. Las solicitudes que alcanzan la ruta cuentan antes del controlador. La API devuelve 429 con `Retry-After`, en segundos. Los límites y el tamaño máximo del JSON cubren el prototipo. En INC-06 se debe comprobar la dirección efectiva de cliente y el proxy de confianza antes de usar esos límites públicamente.
+- **Navegador y transporte.** El perfil de sesión incluye `expiraEn` en milisegundos Unix. React retira el perfil y los datos al vencer o cerrar la sesión. Si la revocación falla, avisa que solo se confirmó el cierre en ese navegador. Las respuestas de cuentas y lecturas protegidas llevan `Cache-Control: no-store`. Con `NODE_ENV=production` el arranque normal exige HTTPS para ambas operaciones. La confianza en el proxy está desactivada y un encabezado reenviado no habilita por sí mismo una petición HTTP. INC-06 debe verificar la terminación TLS y la configuración efectiva de Render. Los orígenes CORS siguen explícitos.
 
 ## Incrementos y aceptación
 
@@ -162,13 +162,13 @@ Si falla la publicación, mantener restringido el acceso al backend y revisar lo
 | INC-01 | Confirmado en Git | B01 e I05 resueltos. DTO sin uso retirados. 288 backend y 66 frontend aprobados, más typecheck, ESLint, build y comprobación HTTP dirigida. | `43f08070fdaf8fa34a8f19684a2772a21aa0d303` |
 | INC-02 | Confirmado en Git | 22 casos HTTP y 7 de React nuevos. Suites completas 310/310 backend y 73/73 frontend. Typecheck, lint y build aprobados. | `e4c1a5c5387bae41946f220d2ec67b871ea7cfe4` |
 | INC-03 | Confirmado en Git | Actualización 001 → 002 con datos previos, esquema y permisos comprobados. 21 casos PostgreSQL, 310 backend y 33 de protecciones aprobados. Recuperación documentada. | `1f57de518bd3d3e21f90f510123558d2aec1bd12` |
-| INC-04 | Implementado y verificado localmente | Alta pública de clientes y lecturas limitadas a representantes habilitados. 325 pruebas backend, 83 frontend y 22 casos PostgreSQL aprobados. Typecheck, lint y build correctos. | Pendiente |
-| INC-05 | Pendiente | Pendiente | Pendiente |
+| INC-04 | Confirmado en Git | Alta pública de clientes y lecturas limitadas a representantes habilitados. 325 pruebas backend, 83 frontend y 22 casos PostgreSQL aprobados. Typecheck, lint y build correctos. | `7c1e5cd0bdc131ef88c45b1ce3524c6e101df1dc` |
+| INC-05 | Implementado y verificado localmente | Límites de credenciales, solicitudes y sesiones comprobados. 341 pruebas backend, 91 frontend y 24 casos PostgreSQL aprobados. | Pendiente |
 | INC-06 | Pendiente | Pendiente | Pendiente |
 | INC-07 | Pendiente | Pendiente | Pendiente |
 | INC-08 | Pendiente | Pendiente | Pendiente |
 
-La actualización de una base con `001` y el control de lectura de INC-04 se verificaron localmente. Para publicar quedan pendientes la revisión del estado remoto y de los representantes de ese entorno, los controles de abuso, el ciclo de sesiones y las comprobaciones de los servicios públicos. La interrupción entre DDL e historial tiene un procedimiento de diagnóstico; se debe revisar el estado antes de reintentar una migración interrumpida.
+La actualización desde `001`, los permisos de lectura y el endurecimiento de cuentas se verificaron localmente. Antes de publicar quedan la revisión de la base remota y de sus representantes, la terminación HTTPS y la dirección de cliente vistas por Express detrás del proxy, y las comprobaciones del flujo publicado. La interrupción entre DDL e historial tiene un procedimiento de diagnóstico. Revisar el estado antes de reintentar una migración interrumpida.
 
 ### INC-01 · Evidencia del 24/11/2026
 
@@ -245,4 +245,20 @@ El runner PostgreSQL verificó la transición desde `001`, la instalación desde
 | `node --test scripts/postgres.test.mjs` y `node --test scripts/verificar-docker.test.mjs` | **33/33** protecciones PostgreSQL y **32/32** autopruebas del verificador Docker con fixtures sintéticos. |
 | Revisión de alcance y `git diff --check` | Correcta. `.env`, `secrets/` y los archivos privados de SDD siguen excluidos. |
 
-Las suites se ejecutaron en una copia temporal con Node **22.23.4** y pnpm **12.3.4**, usando las versiones de los lockfiles de la rama. La verificación se limitó a recursos locales y datos ficticios. El commit manual de INC-04 está pendiente. El endurecimiento de cuentas y sesiones se evaluará en INC-05 antes de publicar.
+Las suites se ejecutaron en una copia temporal con Node **22.23.4** y pnpm **12.3.4**, usando las versiones de los lockfiles de la rama. La verificación se limitó a recursos locales y datos ficticios. INC-04 quedó confirmado en `7c1e5cd0bdc131ef88c45b1ce3524c6e101df1dc`.
+
+### INC-05 · Evidencia del 25/11/2026
+
+Partida `7c1e5cd` en `feature/cuentas-usuarios`. Las pruebas HTTP comprobaron el límite de 72 bytes en ASCII, caracteres acentuados y emoji, y el rechazo de 73 antes de acceder al almacén. El limitador detuvo login, alta y envío de consultas con 429 y `Retry-After`, y volvió a admitirlos en la siguiente ventana. Los tests comprobaron el cupo por cuenta y por proceso, la revocación concurrente y la recuperación del cupo de sesiones vencidas.
+
+React se verificó con red controlada. Se comprobó el vencimiento visible, la retirada inmediata del token cuando la revocación queda sin confirmar, y el aviso de cuenta creada cuando falla el ingreso posterior. En loopback, una conexión TLS con CA sintética válida admitió el alta. El arranque normal en modo `production` rechazó el login por HTTP aun con un encabezado de protocolo reenviado.
+
+| Verificación ejecutada | Resultado |
+| --- | --- |
+| `pnpm --dir backend with current test` y `pnpm --dir backend with current typecheck` | **341/341** y TypeScript correcto. |
+| `pnpm --dir frontend with current test`, `lint` y `build` | **91/91**, ESLint y build Vite de producción correctos. |
+| `pnpm --dir backend with current test:postgres --limpiar` | **24 casos hoja** en dos instancias PostgreSQL locales descartables. Los totales 12 y 14 de TAP incluyen un contenedor cada uno. Se comprobó el rechazo con `UNIQUE(email)` ausente o un `CHECK(tipo)` incorrecto, además del arranque en modo producción. |
+| Configuración Compose de desarrollo y pruebas, y `node --test scripts/postgres.test.mjs` | Compose correcto y **33/33** protecciones aprobadas. Inventario Docker inicial y final idéntico. |
+| `git diff --check` y alcance | Correctos. Las credenciales privadas y Spec Kit siguen excluidos. |
+
+La copia temporal usó Node **22.23.4** y pnpm **12.3.4** con los lockfiles existentes. Las verificaciones usaron datos ficticios y se limitaron al equipo local. Los ensayos de restricciones cambiaron únicamente el esquema de la instancia descartable que crea el runner y restauraron las restricciones esperadas. La configuración de Render, los proxies de confianza y el comportamiento público se verificarán en sus etapas. El commit manual de INC-05 está pendiente.

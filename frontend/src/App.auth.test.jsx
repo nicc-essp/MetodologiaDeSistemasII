@@ -7,7 +7,7 @@ import { formularioFicticio, perfilRepresentanteFicticio, respuestaJson } from '
 
 const apiBase = 'https://api.ejemplo.invalid';
 const usuario = { id: 1, nombre: 'Cuenta ficticia', email: 'cuenta@ejemplo.invalid', tipo: 'cliente' };
-const perfilCliente = { ...usuario, puedeLeerConsultas: false };
+const perfilCliente = { ...usuario, puedeLeerConsultas: false, expiraEn: Date.now() + 8 * 60 * 60 * 1000 };
 const credenciales = { email: usuario.email, password: 'ClaveFicticiaDePrueba' };
 const token = 'token-de-sesion-ficticio';
 
@@ -103,7 +103,9 @@ it('inicia sesión y recupera el perfil del servidor al volver a montar la aplic
 });
 
 it.each([
+  [400, 'La contraseña no puede superar los 72 bytes en UTF-8', 'La contraseña no puede superar los 72 bytes en UTF-8'],
   [401, 'Credenciales inválidas', 'Credenciales inválidas'],
+  [429, 'Detalle interno ficticio', 'Alcanzaste el límite de solicitudes. Esperá e intentá nuevamente.'],
   [500, 'Detalle interno ficticio', 'No se pudo completar el acceso. Intente nuevamente.'],
 ])('mantiene el formulario de login operable ante HTTP %i', async (status, message, esperado) => {
   const api = controlarApi().mockResolvedValueOnce(respuestaJson({ message }, status));
@@ -228,4 +230,70 @@ it('descarta una respuesta de consultas que llega después de cerrar sesión', a
   expect(await screen.findByRole('alert')).toHaveTextContent('Iniciá sesión para ver las consultas recibidas.');
   await act(async () => { resolverListado(respuestaJson([formularioFicticio])); });
   expect(screen.queryByText(formularioFicticio.email)).not.toBeInTheDocument();
+});
+
+it('cierra la sesión local de inmediato y comunica una revocación sin confirmar', async () => {
+  sessionStorage.setItem('docker-laws-token', token);
+  let rechazarLogout;
+  const api = controlarApi()
+    .mockResolvedValueOnce(respuestaJson(perfilRepresentanteFicticio))
+    .mockResolvedValueOnce(respuestaJson([formularioFicticio]))
+    .mockImplementationOnce(() => new Promise((_resolve, reject) => { rechazarLogout = reject; }));
+  abrirRuta('/consultas');
+  await screen.findByText(formularioFicticio.email);
+
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar sesión' }));
+  expect(leerToken()).toBe('');
+  expect(screen.queryByText(formularioFicticio.email)).not.toBeInTheDocument();
+  expect(api).toHaveBeenNthCalledWith(3, `${apiBase}/auth/logout`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` },
+  });
+  await act(async () => { rechazarLogout(new Error('fallo de red ficticio')); });
+  expect(screen.getByText('Sesión cerrada en este navegador. No se pudo confirmar su revocación en el servidor.')).toBeInTheDocument();
+  expect(screen.queryByText('fallo de red ficticio')).not.toBeInTheDocument();
+  expect(leerToken()).toBe('');
+});
+
+it('vence una sesión restaurada y retira el perfil, las consultas y el token', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  try {
+    sessionStorage.setItem('docker-laws-token', token);
+    const perfil = { ...perfilRepresentanteFicticio, expiraEn: Date.now() + 1000 };
+    const api = controlarApi()
+      .mockResolvedValueOnce(respuestaJson(perfil))
+      .mockResolvedValueOnce(respuestaJson([formularioFicticio]));
+    await act(async () => { abrirRuta('/consultas'); });
+    expect(screen.getByText(formularioFicticio.email)).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(999); });
+    expect(leerToken()).toBe(token);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Iniciá sesión para ver las consultas recibidas.');
+    expect(screen.queryByText(formularioFicticio.email)).not.toBeInTheDocument();
+    expect(screen.queryByText(perfil.nombre)).not.toBeInTheDocument();
+    expect(leerToken()).toBe('');
+    expect(api).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it.each([undefined, 1])('descarta un perfil restaurado con vencimiento ausente o inválido (%s)', async expiraEn => {
+  sessionStorage.setItem('docker-laws-token', token);
+  const api = controlarApi().mockResolvedValueOnce(respuestaJson({ ...perfilRepresentanteFicticio, expiraEn }));
+  abrirRuta('/consultas');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Iniciá sesión para ver las consultas recibidas.');
+  expect(leerToken()).toBe('');
+  expect(api).toHaveBeenCalledTimes(1);
+});
+
+it('informa que la cuenta ya existe tras un alta exitosa y un fallo de acceso posterior', async () => {
+  const api = controlarApi()
+    .mockResolvedValueOnce(respuestaJson(usuario, 201))
+    .mockRejectedValueOnce(new Error('fallo de red ficticio'));
+  abrirRuta('/register');
+  await registrar(userEvent.setup());
+  expect(await screen.findByRole('status')).toHaveTextContent('La cuenta se creó. Iniciá sesión para continuar.');
+  expect(screen.queryByRole('button', { name: 'Registrarse' })).not.toBeInTheDocument();
+  expect(api).toHaveBeenCalledTimes(2);
+  expect(leerToken()).toBe('');
 });

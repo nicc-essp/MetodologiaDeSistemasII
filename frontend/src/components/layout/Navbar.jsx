@@ -1,14 +1,18 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
+import { obtenerMensajeErrorCuenta } from '../../services/authService';
 
 export function Navbar() {
   const { usuario, cargando, salir } = useAuth();
+  const [avisoSalida, setAvisoSalida] = useState('');
 
   const handleLogout = async () => {
+    setAvisoSalida('');
     try {
       await salir();
-    } catch {
-      // El contexto limpia la sesión local aunque falle la red.
+    } catch (causa) {
+      setAvisoSalida(obtenerMensajeErrorCuenta(causa, 'salida'));
     }
   };
 
@@ -40,6 +44,7 @@ export function Navbar() {
           </>
         ) : null}
       </nav>
+      {!usuario && avisoSalida && <p role="alert">{avisoSalida}</p>}
     </header>
   );
 }
