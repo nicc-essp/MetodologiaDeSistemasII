@@ -67,6 +67,42 @@ La segunda ejecución consulta el historial y no repite la migración. La CLI so
 
 Ejecutar un solo runner a la vez. La transacción de la migración protege su DDL y concesiones; el registro posterior de Umzug es otra operación. Si el proceso se interrumpe entre ambas, revisar tabla e historial antes de reintentar. Este incremento no agrega coordinación entre migradores concurrentes ni recuperación destructiva.
 
+## Actualización local de 001 a 002
+
+La revisión que incorpora cuentas prepara los almacenes de consultas y usuarios antes de abrir HTTP. Una base con solo `001-crear-consultas` requiere aplicar explícitamente `002-crear-usuarios` antes de arrancar ese backend. `002` agrega `app.usuarios` y su secuencia en una transacción. Se conservan `app.consultas`, sus permisos y el registro de `001`. El rol migrador posee los objetos nuevos. El rol de aplicación recibe `SELECT` e `INSERT` sobre usuarios y `USAGE` sobre su secuencia, y conserva la separación respecto del historial.
+
+1. En el destino local acordado, verificar la revisión que se desea arrancar, la configuración de conexión y el respaldo cuando corresponda. Antes de migrar, revisar que el historial contenga `001`, que `app.usuarios` y su secuencia no estén creadas, y registrar el conteo de consultas. Hacer la comprobación con un solo migrador y una terminal con configuración local.
+2. Ejecutar los siguientes comandos desde la raíz, uno por uno. Continuar solo si el paso anterior terminó correctamente. En el estado esperado, la CLI aplica únicamente `002-crear-usuarios`.
+
+   ```powershell
+   pnpm --dir backend db:migrate
+   pnpm --dir backend db:status
+   ```
+
+3. Confirmar `001` y `002` en el historial, sin pendientes, y el conteo conservado de consultas. Verificar las cinco columnas `NOT NULL`, PK `id`, `UNIQUE(email)`, `usuarios_tipo_check`, índices válidos, secuencia y permisos. Arrancar Express con `pnpm --dir backend start` o seguir el inicio de Compose documentado arriba. El arranque usa `docker_laws_app`.
+
+Para practicar la actualización, `pnpm --dir backend test:postgres --limpiar` usa las dos instancias descartables del runner. La suite de migraciones aplica solo `001` mediante Umzug, inserta una consulta ficticia como aplicación y verifica que Express exige `002`. Después aplica `002` con la CLI, recupera por HTTP la consulta previa con su ID y contenido, y comprueba alta, duplicado y login sobre PostgreSQL. Repite el migrador y verifica que no quede nada pendiente. La otra suite conserva el escenario de instalación desde una base vacía.
+
+### Recuperación si falla la migración
+
+Guardar la salida segura, detener el arranque y consultar el estado antes de reintentar. Con el rol migrador en el destino autorizado, usar consultas de solo lectura para contrastar los objetos con `app."SequelizeMeta"`. La CLI `db:status` es local y puede inicializar el historial técnico.
+
+```sql
+SELECT to_regclass('app.usuarios') AS usuarios,
+       to_regclass('app.usuarios_id_seq') AS secuencia;
+-- Consultar solo si se verificó la existencia del historial.
+SELECT name FROM app."SequelizeMeta" ORDER BY name;
+```
+
+| Estado constatado | Acción |
+| --- | --- |
+| `002` ausente del historial y sin objetos nuevos | Si el DDL se revirtió, corregir la causa y cotejar que las consultas y `001` siguen intactas. Reintentar con un solo migrador en el destino autorizado. |
+| `002` ausente del historial y con tabla, secuencia o restricciones existentes | Posible interrupción después del commit del DDL y antes del registro en Umzug. Suspender reintentos. Un nuevo `up` puede fallar al agregar otra vez `usuarios_tipo_check`. Cotejar estructura, propietarios, permisos, datos e historial con el respaldo y acordar una recuperación específica antes de escribir. |
+| `002` registrada y objetos completos | La repetición normal de `up` debe indicar que no hay pendientes. Si Express falla, revisar configuración y permisos del rol de aplicación. |
+| `002` registrada y objetos incompletos o distintos | Detener el arranque y acordar reparación o restauración verificada. El historial por sí solo no acredita convergencia del esquema. |
+
+La CLI no ofrece `down`. Conservar ambos archivos de migración y revisar cualquier reparación del historial o restauración antes de ejecutarla. La validación de este ensayo corresponde al PostgreSQL local descartable. Supabase requiere su propio procedimiento, autorización en el momento y las comprobaciones de [seguridad y despliegue](../../docs/PLAN-SEGURIDAD-DESPLIEGUE.md#actualización-de-supabase-y-recuperación).
+
 ## Verificación reproducible
 
 ```powershell

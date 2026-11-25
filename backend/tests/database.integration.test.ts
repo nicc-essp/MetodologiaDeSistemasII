@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import type { AddressInfo } from 'node:net';
 import { QueryTypes } from 'sequelize';
 import type { QueryInterface } from 'sequelize';
 import { MigrationError } from 'umzug';
 import { leerConfiguracionPostgres } from '../config/database.config';
 import { crearConexionPostgres } from '../database/connection';
 import { crearMigrador, describirErrorPostgres, migracionInicial, migracionUsuarios } from '../database/migrate';
+import { iniciarServidor } from '../index';
 import { definirConsulta } from '../models/consulta.model';
 import { consultaFicticia } from './helpers/fixtures';
 import { comprobarDestinoDescartable, ejecutarCli } from './helpers/postgres';
@@ -15,6 +17,8 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
   comprobarDestinoDescartable();
   const migrador = crearConexionPostgres(leerConfiguracionPostgres('migrador'));
   const aplicacion = crearConexionPostgres(leerConfiguracionPostgres('aplicacion'));
+  const historial = () => migrador.query('SELECT name FROM app."SequelizeMeta" ORDER BY name', { type: QueryTypes.SELECT });
+  const opcionesServidor = { puerto: 0, host: '127.0.0.1' };
   try {
     // Fuera de los subtests: una base que ya tenga tablas detiene todo antes del DDL.
     await migrador.authenticate();
@@ -52,11 +56,34 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
       assert.deepEqual(await registro.executed(), []);
     });
 
-    await t.test('la CLI aplica la migración sobre una base sin tablas de negocio', async () => {
-      assert.match(ejecutarCli('up'), /Migraciones aplicadas: 001-crear-consultas, 002-crear-usuarios/);
-      assert.deepEqual(await migrador.query('SELECT name FROM app."SequelizeMeta" ORDER BY name', { type: QueryTypes.SELECT }),
-        [{ name: migracionInicial }, { name: migracionUsuarios }]);
-      assert.deepEqual(await migrador.query('SELECT * FROM app.consultas', { type: QueryTypes.SELECT }), []);
+    const registro = crearMigrador(migrador);
+    assert.deepEqual((await registro.up({ to: migracionInicial })).map(m => m.name), [migracionInicial]);
+    assert.deepEqual(await historial(), [{ name: migracionInicial }]);
+    assert.deepEqual((await registro.pending()).map(m => m.name), [migracionUsuarios]);
+    const Consulta = definirConsulta(aplicacion);
+    assert.deepEqual(await Consulta.findAll({ raw: true }), []);
+    const datosAnteriores = { ...consultaFicticia, asunto: 'Consulta ficticia anterior a 002' };
+    const creadaAntes = await Consulta.create(datosAnteriores);
+    const idAnterior = creadaAntes.get('id');
+    assert.ok(typeof idAnterior === 'number' && Number.isInteger(idAnterior) && idAnterior > 0);
+    const consultaAnterior = { id: idAnterior, ...datosAnteriores };
+    assert.deepEqual(await Consulta.findByPk(consultaAnterior.id, { raw: true }), consultaAnterior);
+
+    await t.test('con solo 001 Express exige la migración de cuentas antes de escuchar', async () => {
+      await assert.rejects(async () => {
+        const inesperado = await iniciarServidor(opcionesServidor);
+        await inesperado.cerrar();
+      }, /comprobar el esquema y los permisos de cuentas/);
+      assert.deepEqual(await historial(), [{ name: migracionInicial }]);
+      const [tabla] = await migrador.query<{ nombre: string | null }>(
+        "SELECT to_regclass('app.usuarios') AS nombre", { type: QueryTypes.SELECT });
+      assert.equal(tabla.nombre, null);
+    });
+
+    await t.test('la CLI aplica solo 002 y conserva la consulta creada con 001', async () => {
+      assert.equal(ejecutarCli('up'), `Migraciones aplicadas: ${migracionUsuarios}`);
+      assert.deepEqual(await historial(), [{ name: migracionInicial }, { name: migracionUsuarios }]);
+      assert.deepEqual(await Consulta.findAll({ raw: true }), [consultaAnterior]);
     });
 
     await t.test('estructura física exacta: INTEGER generado, siete TEXT NOT NULL y sin timestamps', async () => {
@@ -74,23 +101,106 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
       assert.deepEqual(claves, [{ columna: 'id' }]);
     });
 
+    await t.test('usuarios tiene las cinco columnas, secuencia del migrador, índices y tipo restringido de 002', async () => {
+      const columnas = await migrador.getQueryInterface().describeTable({ schema: 'app', tableName: 'usuarios' });
+      assert.deepEqual(Object.keys(columnas).sort(), ['email', 'id', 'nombre', 'password_hash', 'tipo']);
+      assert.match(String(columnas.id.defaultValue), /nextval\(/);
+      for (const [nombre, columna] of Object.entries(columnas)) {
+        assert.equal(columna.allowNull, false, nombre);
+        assert.equal(columna.type, nombre === 'id' ? 'INTEGER' : 'TEXT', nombre);
+      }
+      const [secuencia] = await migrador.query(`
+        SELECT pg_get_serial_sequence('app.usuarios', 'id') AS nombre,
+          pg_get_userbyid(relowner) AS propietario
+        FROM pg_class WHERE oid = 'app.usuarios_id_seq'::regclass AND relkind = 'S'
+      `, { type: QueryTypes.SELECT });
+      assert.deepEqual(secuencia, { nombre: 'app.usuarios_id_seq', propietario: 'docker_laws_migrator' });
+
+      const restricciones = await migrador.query<{
+        tipo: string; nombre: string; definicion: string; validada: boolean; indice: boolean | null;
+      }>(`
+        SELECT c.contype::text AS tipo, c.conname AS nombre, pg_get_constraintdef(c.oid) AS definicion,
+          c.convalidated AS validada, i.indisvalid AND i.indisunique AS indice
+        FROM pg_constraint c LEFT JOIN pg_index i ON i.indexrelid = c.conindid
+        WHERE c.conrelid = 'app.usuarios'::regclass ORDER BY tipo, nombre
+      `, { type: QueryTypes.SELECT });
+      assert.deepEqual(restricciones.map(({ tipo, validada, indice }) => ({ tipo, validada, indice })), [
+        { tipo: 'c', validada: true, indice: null },
+        { tipo: 'p', validada: true, indice: true },
+        { tipo: 'u', validada: true, indice: true },
+      ]);
+      assert.equal(restricciones[0].nombre, 'usuarios_tipo_check');
+      assert.match(restricciones[0].definicion, /'cliente'/);
+      assert.match(restricciones[0].definicion, /'representante'/);
+      assert.equal(restricciones[1].definicion, 'PRIMARY KEY (id)');
+      assert.equal(restricciones[2].definicion, 'UNIQUE (email)');
+      await assert.rejects(aplicacion.query(`
+        INSERT INTO app.usuarios (nombre, email, tipo, password_hash)
+        VALUES ('Cuenta ficticia', 'tipo-invalido@ejemplo.invalid', 'desconocido', 'marcador-sintetico')
+      `), error => {
+        assert.ok(error && typeof error === 'object' && 'original' in error);
+        const causa = error.original as { code: string; constraint: string };
+        assert.equal(causa.code, '23514');
+        assert.equal(causa.constraint, 'usuarios_tipo_check');
+        return true;
+      });
+    });
+
+    await t.test('Express arranca con el rol de aplicación, recupera la consulta previa y persiste cuentas', async () => {
+      const servicio = await iniciarServidor(opcionesServidor);
+      try {
+        const { port } = servicio.servidor.address() as AddressInfo;
+        const base = `http://127.0.0.1:${port}`;
+        const listado = await fetch(`${base}/formulario`);
+        assert.equal(listado.status, 200);
+        assert.deepEqual(await listado.json(), [consultaAnterior]);
+        const detalle = await fetch(`${base}/formulario/${consultaAnterior.id}`);
+        assert.equal(detalle.status, 200);
+        assert.deepEqual(await detalle.json(), consultaAnterior);
+
+        const enviar = (ruta: string, datos: object) => fetch(`${base}/auth${ruta}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos),
+        });
+        const datos = { nombre: 'Cuenta ficticia', email: 'actualizacion@ejemplo.invalid', tipo: 'cliente' };
+        const credenciales = { email: datos.email, password: 'ClaveFicticia002' };
+        const alta = await enviar('/register', { ...datos, ...credenciales });
+        assert.equal(alta.status, 201);
+        const usuario: unknown = await alta.json();
+        assert.ok(usuario && typeof usuario === 'object' && 'id' in usuario
+          && typeof usuario.id === 'number' && usuario.id > 0);
+        assert.deepEqual(usuario, { id: usuario.id, ...datos });
+        const duplicado = await enviar('/register', { ...datos, ...credenciales });
+        assert.equal(duplicado.status, 409);
+        assert.deepEqual(await duplicado.json(), { message: 'El correo electrónico ya está registrado' });
+        const persistidos = await aplicacion.query('SELECT id, nombre, email, tipo FROM app.usuarios', { type: QueryTypes.SELECT });
+        assert.deepEqual(persistidos, [usuario]);
+        const login = await enviar('/login', credenciales);
+        assert.equal(login.status, 200);
+        const sesion: unknown = await login.json();
+        assert.ok(sesion && typeof sesion === 'object' && 'usuario' in sesion);
+        assert.deepEqual(sesion.usuario, usuario);
+      } finally {
+        await servicio.cerrar();
+      }
+    });
+
     await t.test('segunda ejecución y consulta del historial no duplican cambios', async () => {
       assert.equal(ejecutarCli('up'), 'Sin migraciones pendientes.');
       const estado = JSON.parse(ejecutarCli('status'));
       assert.deepEqual(estado.ejecutadas.map((m: { name: string }) => m.name), [migracionInicial, migracionUsuarios]);
       assert.deepEqual(estado.pendientes, []);
-      assert.deepEqual(await migrador.query('SELECT name FROM app."SequelizeMeta" ORDER BY name', { type: QueryTypes.SELECT }),
-        [{ name: migracionInicial }, { name: migracionUsuarios }]);
+      assert.deepEqual(await historial(), [{ name: migracionInicial }, { name: migracionUsuarios }]);
+      assert.deepEqual(await Consulta.findAll({ raw: true }), [consultaAnterior]);
     });
 
     await t.test('aplicación crea y lee con el modelo sin cambiar textos ni imponer unicidad de contacto', async () => {
-      const Consulta = definirConsulta(aplicacion);
       const primero = await Consulta.create(consultaFicticia);
       const segundo = await Consulta.create(consultaFicticia);
       assert.equal(typeof primero.get('id'), 'number');
       assert.notEqual(primero.get('id'), segundo.get('id'));
       assert.deepEqual(primero.get({ plain: true }), { id: primero.get('id'), ...consultaFicticia });
-      assert.deepEqual(await Consulta.findAll({ order: [['id', 'ASC']], raw: true }), [primero.get({ plain: true }), segundo.get({ plain: true })]);
+      assert.deepEqual(await Consulta.findAll({ order: [['id', 'ASC']], raw: true }),
+        [consultaAnterior, primero.get({ plain: true }), segundo.get({ plain: true })]);
       await assert.rejects(aplicacion.query('INSERT INTO app.consultas (nombre) VALUES (NULL)'), error => {
         assert.ok(error && typeof error === 'object' && 'original' in error);
         assert.equal((error.original as { code: string }).code, '23502');
@@ -111,9 +221,13 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
           return true;
         });
       }
-      const [secuencia] = await aplicacion.query<{ uso: boolean; actualizacion: boolean }>(
-        "SELECT has_sequence_privilege(current_user,'app.consultas_id_seq','USAGE') AS uso, has_sequence_privilege(current_user,'app.consultas_id_seq','UPDATE') AS actualizacion", { type: QueryTypes.SELECT });
-      assert.deepEqual(secuencia, { uso: true, actualizacion: false });
+      for (const nombre of ['app.consultas_id_seq', 'app.usuarios_id_seq']) {
+        const [secuencia] = await aplicacion.query<{ uso: boolean; actualizacion: boolean }>(`
+          SELECT has_sequence_privilege(current_user, :nombre, 'USAGE') AS uso,
+            has_sequence_privilege(current_user, :nombre, 'UPDATE') AS actualizacion
+        `, { replacements: { nombre }, type: QueryTypes.SELECT });
+        assert.deepEqual(secuencia, { uso: true, actualizacion: false }, nombre);
+      }
       const propietarios = await migrador.query<{ tablename: string; tableowner: string }>(
         "SELECT tablename, tableowner FROM pg_tables WHERE schemaname='app' ORDER BY tablename", { type: QueryTypes.SELECT });
       assert.deepEqual(propietarios, [

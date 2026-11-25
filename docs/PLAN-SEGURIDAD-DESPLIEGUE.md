@@ -158,8 +158,8 @@ Si falla la publicación, mantener restringido el acceso al backend y revisar lo
 | Incremento | Estado | Resultado verificado | Commit manual |
 | --- | --- | --- | --- |
 | INC-01 | Confirmado en Git | B01 e I05 resueltos. DTO sin uso retirados. 288 backend y 66 frontend aprobados, más typecheck, ESLint, build y comprobación HTTP dirigida. | `43f08070fdaf8fa34a8f19684a2772a21aa0d303` |
-| INC-02 | Implementado y verificado localmente | 22 casos HTTP y 7 de React nuevos. Suites completas 310/310 backend y 73/73 frontend. Typecheck, lint y build aprobados. | Pendiente |
-| INC-03 | Pendiente | Pendiente | Pendiente |
+| INC-02 | Confirmado en Git | 22 casos HTTP y 7 de React nuevos. Suites completas 310/310 backend y 73/73 frontend. Typecheck, lint y build aprobados. | `e4c1a5c5387bae41946f220d2ec67b871ea7cfe4` |
+| INC-03 | Implementado y verificado localmente | Actualización 001 → 002 con datos previos, esquema y permisos comprobados. 21 casos PostgreSQL, 310 backend y 33 de protecciones aprobados. Recuperación documentada. | Pendiente |
 | INC-04 | Pendiente de aprobación de política | Pendiente | Pendiente |
 | INC-05 | Pendiente | Pendiente | Pendiente |
 | INC-06 | Pendiente | Pendiente | Pendiente |
@@ -205,4 +205,25 @@ Verificación en la copia temporal con las dependencias de los lockfiles, Node *
 | `pnpm --dir frontend with current build --configLoader runner --outDir <salida-temporal>` | Correcto, 38 módulos transformados. |
 | `git diff --check` y revisión del alcance | Sin errores de espacios. Solo cambiaron las dos pruebas nuevas, el script `test` de backend y este registro. |
 
-Se ejecutaron **383 casos de las dos suites**. PostgreSQL real queda para INC-03. El manejo de logout fallido, los límites de credenciales y el endurecimiento de sesiones quedan para INC-05. La autorización de consultas sigue pendiente de INC-04. El commit de INC-02 es manual y se verificará antes de avanzar.
+Se ejecutaron **383 casos de las dos suites**. PostgreSQL real queda para INC-03. El manejo de logout fallido, los límites de credenciales y el endurecimiento de sesiones quedan para INC-05. La autorización de consultas sigue pendiente de INC-04.
+
+Homero registró INC-02 en `e4c1a5c`. Al retomar, el commit coincidió con los cuatro archivos previstos y el árbol de trabajo estaba limpio.
+
+### INC-03 · Evidencia del 25/11/2026
+
+Partida `e4c1a5c` en `feature/cuentas-usuarios`. La suite de migraciones del runner existente aplicó solo `001` con Umzug e insertó una consulta ficticia con `docker_laws_app`. Express exigió `002` antes de escuchar. La CLI aplicó solo `002` y luego Express recuperó por listado y detalle el mismo ID y los siete campos de la consulta. Se comprobó el alta, el rechazo de duplicados y el login sobre el almacén PostgreSQL. Otra instancia descartable verificó el arranque desde base vacía aplicando ambas migraciones.
+
+Con PostgreSQL **17.12** se verificaron las cinco columnas `NOT NULL` de usuarios, la PK, el índice único de correo y el rechazo por `usuarios_tipo_check`. El migrador conservó la propiedad de objetos e historial. La aplicación conservó las denegaciones de DDL, UPDATE, DELETE y acceso al historial. Se comprobaron `SELECT/INSERT` y `USAGE` de secuencias bajo el rol restringido. La repetición de la CLI dejó el esquema e historial sin pendientes y la consulta intacta.
+
+| Verificación ejecutada | Resultado |
+| --- | --- |
+| `pnpm --dir backend with current test:postgres --limpiar` | **21 casos hoja aprobados**. Node informó 11 resultados para migraciones y 12 para API al incluir los dos casos contenedores. |
+| `pnpm --dir backend with current test` | **310/310**. |
+| `node --test scripts/postgres.test.mjs` | **33/33**. |
+| `pnpm --dir backend with current typecheck` | Correcto. El primer intento detectó que Sequelize tipaba el ID del fixture como `unknown`. Se añadió la comprobación del ID entero antes de buscarlo. |
+| Inventario Docker antes y después del runner | Mismos **5 contenedores, 60 volúmenes y 6 redes**. El runner retiró los recursos nuevos de las dos instancias protegidas. |
+| Revisión del diff y `git diff --check` | Correcta. Cambios limitados a las dos pruebas PostgreSQL, la guía de persistencia y este registro. |
+
+Docker Desktop estaba detenido al comienzo. Homero lo inició y se verificó el motor Linux local antes de ejecutar. Se usaron las dependencias de la copia de auditoría con Node **22.23.4** y pnpm **12.3.4**. En la [guía de persistencia](../backend/database/README.md#actualización-local-de-001-a-002) quedaron la secuencia local y los pasos para diagnosticar un DDL confirmado sin registro posterior. Los archivos `001` y `002`, el runner, Compose y los permisos de limpieza están intactos. La evidencia es local. La condición de endurecer las comprobaciones de restricciones en el arranque corresponde a INC-05.
+
+El commit manual de INC-03 está pendiente. INC-04 requiere presentar y aprobar la política de autorización y el alta privada de representantes antes de implementar.

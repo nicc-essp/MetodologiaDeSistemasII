@@ -8,6 +8,7 @@ import { createApp } from '../app';
 import { iniciarServidor } from '../index';
 import { leerConfiguracionPostgres } from '../config/database.config';
 import { crearConexionPostgres } from '../database/connection';
+import { migracionInicial, migracionUsuarios } from '../database/migrate';
 import { prepararAlmacenPostgres } from '../data/formularios-postgres';
 import type { Formulario } from '../models/formulario';
 import { consultaFicticia } from './helpers/fixtures';
@@ -43,7 +44,7 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
       assert.deepEqual(await migrador.query("SELECT tablename FROM pg_tables WHERE schemaname='app'", { type: QueryTypes.SELECT }), []);
     });
 
-    ejecutarCli('up');
+    assert.equal(ejecutarCli('up'), `Migraciones aplicadas: ${migracionInicial}, ${migracionUsuarios}`);
     servicio = await iniciarServidor({ env, puerto: 0, host: '127.0.0.1' });
     await t.test('el arranque migrado comienza vacío y mantiene health y CORS', async () => {
       assert.deepEqual(await listar(), []);
