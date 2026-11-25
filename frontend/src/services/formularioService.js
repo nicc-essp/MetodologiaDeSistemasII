@@ -1,4 +1,5 @@
 import { obtenerBaseApi } from '../config/apiConfig';
+import { encabezadosAuth } from './authService';
 
 const campos = ['nombre', 'apellido', 'dni', 'telefono', 'email', 'asunto', 'mensaje'];
 const mensajesSeguros = new Set([
@@ -39,7 +40,10 @@ async function solicitar(url, options, estadoEsperado, listado = false) {
   } catch {
     throw new ErrorFormulario('red');
   }
+  if (response.status === 429) throw new ErrorFormulario('limite');
   if (response.status >= 500) throw new ErrorFormulario('servidor');
+  if (estadoEsperado === 200 && response.status === 401) throw new ErrorFormulario('sesion');
+  if (estadoEsperado === 200 && response.status === 403) throw new ErrorFormulario('permiso');
   let datos;
   try {
     datos = await response.json();
@@ -56,6 +60,9 @@ async function solicitar(url, options, estadoEsperado, listado = false) {
 }
 
 export function obtenerMensajeError(error, operacion) {
+  if (error instanceof ErrorFormulario && error.categoria === 'limite') {
+    return 'Alcanzaste el límite de envíos. Esperá e intentá nuevamente.';
+  }
   if (error instanceof ErrorFormulario && error.categoria === 'configuracion') {
     return 'La conexión con el servidor no está configurada correctamente.';
   }
@@ -78,9 +85,9 @@ export async function crearFormulario(formulario) {
 }
 
 export async function obtenerFormulario(id) {
-  return solicitar(`${urlFormulario()}/${id}`, undefined, 200);
+  return solicitar(`${urlFormulario()}/${id}`, { headers: encabezadosAuth() }, 200);
 }
 
 export async function obtenerFormularios() {
-  return solicitar(urlFormulario(), undefined, 200, true);
+  return solicitar(urlFormulario(), { headers: encabezadosAuth() }, 200, true);
 }

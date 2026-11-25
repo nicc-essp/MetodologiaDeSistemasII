@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function comprobarDestinoDescartable() {
@@ -29,4 +29,18 @@ export function ejecutarCli(comando: 'up' | 'status') {
     : spawnSync('pnpm', ['--silent', 'run', script], opciones);
   assert.equal(resultado.status, 0, resultado.stderr);
   return resultado.stdout.trim();
+}
+
+export function ejecutarAltaRepresentante(datos: unknown) {
+  comprobarDestinoDescartable();
+  const temporal = mkdtempSync(join(tmpdir(), 'docker-laws-representante-'));
+  const archivo = join(temporal, 'cuenta.json');
+  try {
+    writeFileSync(archivo, JSON.stringify(datos), { flag: 'wx', mode: 0o600 });
+    return spawnSync(process.execPath, ['--import', 'tsx', 'scripts/crear-representante.ts', archivo], {
+      cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8', timeout: 20000,
+    });
+  } finally {
+    try { unlinkSync(archivo); } finally { rmdirSync(temporal); }
+  }
 }

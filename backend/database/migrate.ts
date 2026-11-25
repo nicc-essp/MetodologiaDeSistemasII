@@ -5,13 +5,18 @@ import type { Sequelize } from 'sequelize';
 import { MigrationError, SequelizeStorage, Umzug } from 'umzug';
 import { leerConfiguracionPostgres } from '../config/database.config';
 import { crearConexionPostgres } from './connection';
-import { up } from '../migrations/001-crear-consultas';
+import { up as crearConsultas } from '../migrations/001-crear-consultas';
+import { up as crearUsuarios } from '../migrations/002-crear-usuarios';
 
 export const migracionInicial = '001-crear-consultas';
+export const migracionUsuarios = '002-crear-usuarios';
 
 export function crearMigrador(sequelize: Sequelize) {
   return new Umzug({
-    migrations: [{ name: migracionInicial, up }],
+    migrations: [
+      { name: migracionInicial, up: crearConsultas },
+      { name: migracionUsuarios, up: crearUsuarios },
+    ],
     context: sequelize.getQueryInterface(),
     storage: new SequelizeStorage({ sequelize, schema: 'app', tableName: 'SequelizeMeta' }),
     logger: undefined,
@@ -42,7 +47,7 @@ export function describirErrorPostgres(error: unknown): string {
   const original = causa && typeof causa === 'object' && 'original' in causa ? causa.original : undefined;
   const codigo = original && typeof original === 'object' && 'code' in original ? original.code : undefined;
   const estado = typeof codigo === 'string' && /^[0-9A-Z]{5}$/.test(codigo) ? ` (SQLSTATE ${codigo})` : '';
-  const nombre = error instanceof MigrationError && error.migration.name === migracionInicial ? ` ${migracionInicial}` : '';
+  const nombre = error instanceof MigrationError && error.migration.name ? ` ${error.migration.name}` : '';
   return `Falló la operación de migraciones${nombre}${estado}. Revisá el esquema app, sus objetos y los permisos del migrador.`;
 }
 

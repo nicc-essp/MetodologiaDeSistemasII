@@ -8,4 +8,5 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   window.history.replaceState({}, '', '/');
+  sessionStorage.clear();
 });

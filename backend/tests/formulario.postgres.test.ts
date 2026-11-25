@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { fork, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { QueryTypes } from 'sequelize';
@@ -8,20 +9,26 @@ import { createApp } from '../app';
 import { iniciarServidor } from '../index';
 import { leerConfiguracionPostgres } from '../config/database.config';
 import { crearConexionPostgres } from '../database/connection';
+import { migracionInicial, migracionUsuarios } from '../database/migrate';
 import { prepararAlmacenPostgres } from '../data/formularios-postgres';
 import type { Formulario } from '../models/formulario';
 import { consultaFicticia } from './helpers/fixtures';
 import { withHttp } from './helpers/http';
-import { comprobarDestinoDescartable, ejecutarCli } from './helpers/postgres';
+import { comprobarDestinoDescartable, ejecutarAltaRepresentante, ejecutarCli } from './helpers/postgres';
+import { autenticarRepresentante, datosRepresentanteFicticio, encabezadosBearer, iniciarSesionFicticia, representanteEnMemoria } from './helpers/auth';
 
 test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y cierre', { timeout: 90000 }, async t => {
   comprobarDestinoDescartable();
-  const env = { ...process.env, CORS_ORIGINS: 'http://localhost:5173' };
+  let ahora = Date.now();
+  t.mock.method(Date, 'now', () => ahora);
+  const env = { ...process.env, CORS_ORIGINS: 'http://localhost:5173', AUTH_REPRESENTANTES_IDS: '' };
   const migrador = crearConexionPostgres(leerConfiguracionPostgres('migrador', env));
   let servicio: Awaited<ReturnType<typeof iniciarServidor>> | undefined;
+  let headersRepresentante: Record<string, string>;
   const url = () => `http://127.0.0.1:${(servicio!.servidor.address() as AddressInfo).port}`;
+  const leer = (ruta = '/formulario') => fetch(`${url()}${ruta}`, { headers: headersRepresentante });
   const listar = async () => {
-    const response = await fetch(`${url()}/formulario`);
+    const response = await leer();
     assert.equal(response.status, 200);
     const datos: unknown = await response.json();
     assert.ok(Array.isArray(datos));
@@ -43,15 +50,110 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
       assert.deepEqual(await migrador.query("SELECT tablename FROM pg_tables WHERE schemaname='app'", { type: QueryTypes.SELECT }), []);
     });
 
-    ejecutarCli('up');
+    assert.equal(ejecutarCli('up'), `Migraciones aplicadas: ${migracionInicial}, ${migracionUsuarios}`);
+    const altaPrivada = ejecutarAltaRepresentante(datosRepresentanteFicticio);
+    assert.ifError(altaPrivada.error);
+    assert.equal(altaPrivada.status, 0, altaPrivada.stderr);
+    assert.equal(altaPrivada.stderr, '');
+    assert.match(altaPrivada.stdout.trim(), /^[1-9][0-9]*$/);
+    const idRepresentante = Number(altaPrivada.stdout.trim());
+
+    await t.test('el comando privado rechaza un duplicado y el rol persistido solo no habilita consultas', async () => {
+      const duplicado = ejecutarAltaRepresentante({ ...datosRepresentanteFicticio, password: 'OtraClaveFicticia' });
+      assert.ifError(duplicado.error);
+      assert.equal(duplicado.status, 1);
+      assert.equal(duplicado.stdout, '');
+      assert.equal(duplicado.stderr.trim(), 'Ya existe una cuenta con ese correo. El alta se canceló.');
+      const sinHabilitacion = await iniciarServidor({ env, puerto: 0, host: '127.0.0.1' });
+      try {
+        const port = (sinHabilitacion.servidor.address() as AddressInfo).port;
+        const base = `http://127.0.0.1:${port}`;
+        const { token, usuario } = await iniciarSesionFicticia(base);
+        assert.equal(usuario.id, idRepresentante);
+        assert.equal(usuario.tipo, 'representante');
+        assert.equal(usuario.puedeLeerConsultas, false);
+        for (const ruta of ['/formulario', '/formulario/1']) {
+          const respuesta = await fetch(`${base}${ruta}`, { headers: encabezadosBearer(token) });
+          assert.equal(respuesta.status, 403);
+          assert.deepEqual(await respuesta.json(), { message: 'No tiene permiso para consultar los formularios' });
+        }
+      } finally {
+        await sinHabilitacion.cerrar();
+      }
+    });
+
+    env.AUTH_REPRESENTANTES_IDS = String(idRepresentante);
     servicio = await iniciarServidor({ env, puerto: 0, host: '127.0.0.1' });
+    headersRepresentante = await autenticarRepresentante(url());
     await t.test('el arranque migrado comienza vacío y mantiene health y CORS', async () => {
       assert.deepEqual(await listar(), []);
       const health = await fetch(`${url()}/health`);
       assert.equal(health.status, 200);
       assert.deepEqual(await health.json(), { status: 'ok' });
-      const response = await fetch(`${url()}/formulario`, { headers: { Origin: 'http://localhost:5173' } });
+      const response = await fetch(`${url()}/formulario`, {
+        headers: { ...headersRepresentante, Origin: 'http://localhost:5173' },
+      });
+      assert.equal(response.status, 200);
       assert.equal(response.headers.get('access-control-allow-origin'), 'http://localhost:5173');
+    });
+
+    await t.test('el arranque en producción requiere HTTPS para iniciar sesión', async () => {
+      const produccion = await iniciarServidor({
+        env: { ...env, NODE_ENV: 'production' }, puerto: 0, host: '127.0.0.1',
+      });
+      try {
+        const { port } = produccion.servidor.address() as AddressInfo;
+        const base = `http://127.0.0.1:${port}`;
+        assert.equal((await fetch(`${base}/health`)).status, 200);
+        const login = await fetch(`${base}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
+          body: JSON.stringify({ email: datosRepresentanteFicticio.email, password: datosRepresentanteFicticio.password }),
+        });
+        assert.equal(login.status, 403);
+        assert.equal(login.headers.get('cache-control'), 'no-store');
+        assert.deepEqual(await login.json(), { message: 'Esta operación requiere HTTPS' });
+      } finally {
+        await produccion.cerrar();
+      }
+    });
+
+    await t.test('el punto de entrada usa PORT y cierra ordenadamente al recibir SIGTERM', { timeout: 20000 }, async prueba => {
+      const puerto = await withHttp((_req, res) => res.end(), async base => new URL(base).port);
+      // La entrega de señales del sistema en Windows no prueba los manejadores POSIX de Node.
+      const simularSenal = `process.once('message', () => {
+        process.disconnect();
+        process.emit('SIGTERM', 'SIGTERM');
+      });`;
+      const hijo = fork(fileURLToPath(new URL('../index.ts', import.meta.url)), [], {
+        cwd: fileURLToPath(new URL('../', import.meta.url)),
+        env: { ...env, PORT: puerto, RENDER: undefined, TRUST_PROXY_CIDRS: undefined },
+        execArgv: ['--import', 'tsx', '--import', `data:text/javascript,${encodeURIComponent(simularSenal)}`],
+        silent: true,
+      });
+      let salida = '';
+      hijo.stdout!.setEncoding('utf8').on('data', texto => { salida += texto; });
+      const cerrado = once(hijo, 'close');
+      try {
+        await Promise.race([
+          once(hijo.stdout!, 'data', { signal: prueba.signal }),
+          cerrado.then(() => { throw new Error('El proceso hijo terminó antes de escuchar HTTP.'); }),
+        ]);
+        assert.equal(salida.trim(), `Backend escuchando en 0.0.0.0:${puerto}.`);
+        const health = `http://127.0.0.1:${puerto}/health`;
+        const respuesta = await fetch(health, { signal: prueba.signal });
+        assert.equal(respuesta.status, 200);
+        assert.deepEqual(await respuesta.json(), { status: 'ok' });
+        const salidaHijo = once(hijo, 'exit', { signal: prueba.signal });
+        hijo.send('cerrar');
+        assert.deepEqual(await salidaHijo, [0, null]);
+        await cerrado;
+        assert.match(salida, /Backend detenido\./);
+        await assert.rejects(fetch(health, { signal: AbortSignal.timeout(2000) }));
+      } finally {
+        if (hijo.exitCode === null && hijo.signalCode === null) hijo.kill();
+        await cerrado;
+      }
     });
 
     let primero: Formulario;
@@ -68,12 +170,12 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
 
     await t.test('detalle mantiene conversiones históricas y 404 para IDs inválidos/inexistentes', async () => {
       for (const id of [String(primero!.id), `0${primero!.id}`, `${primero!.id}.0`, `${primero!.id}e0`]) {
-        const response = await fetch(`${url()}/formulario/${id}`);
+        const response = await leer(`/formulario/${id}`);
         assert.equal(response.status, 200);
         assert.deepEqual(await response.json(), primero!);
       }
       for (const id of ['abc', 'NaN', 'Infinity', '-Infinity', '1.5', '0', '-1', '2147483647', '2147483648', '-2147483649', '999999999999999999999999']) {
-        const response = await fetch(`${url()}/formulario/${id}`);
+        const response = await leer(`/formulario/${id}`);
         assert.equal(response.status, 404, id);
         assert.deepEqual(await response.json(), { message: 'Formulario no encontrado' });
       }
@@ -94,6 +196,8 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
       const antes = await listar();
       const secuenciaAntes = await migrador.query('SELECT last_value FROM app.consultas_id_seq', { type: QueryTypes.SELECT });
       for (const campo of Object.keys(consultaFicticia)) {
+        // Ventanas separadas para comprobar todas las variantes con los límites reales.
+        ahora += 10 * 60 * 1000;
         for (const invalido of ['\u0000', '\uD800', '\uDFFF', '\uD800\uD800', '\uDFFF\uDFFF']) {
           const response = await enviar({ ...consultaFicticia, [campo]: `texto${invalido}` });
           assert.equal(response.status, 400);
@@ -118,6 +222,8 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
       assert.equal(servicio!.servidor.listening, false);
       await assert.rejects(fetch(`${anterior}/health`, { signal: AbortSignal.timeout(2000) }));
       servicio = await iniciarServidor({ env, puerto: 0, host: '127.0.0.1' });
+      assert.equal((await leer()).status, 401);
+      headersRepresentante = await autenticarRepresentante(url());
       assert.deepEqual(await listar(), antes);
     });
 
@@ -125,7 +231,7 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
       const antes = await listar();
       await migrador.query('REVOKE SELECT ON TABLE app.consultas FROM docker_laws_app');
       try {
-        const response = await fetch(`${url()}/formulario`);
+        const response = await leer();
         assert.equal(response.status, 500);
         assert.deepEqual(await response.json(), { message: 'Error interno del servidor' });
       } finally {
@@ -152,10 +258,12 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
         almacen = await prepararAlmacenPostgres(conexion);
       } finally { await conexion.close(); }
       const antes = await listar();
-      await withHttp(createApp({ almacen }), async base => {
+      await withHttp(createApp({ ...representanteEnMemoria(), almacen }), async base => {
+        const headers = await autenticarRepresentante(base);
         for (const [method, ruta] of [['GET', '/formulario'], ['GET', `/formulario/${primero!.id}`], ['POST', '/formulario']]) {
           const response = await fetch(`${base}${ruta}`, { method,
-            headers: { 'Content-Type': 'application/json' }, body: method === 'POST' ? JSON.stringify(consultaFicticia) : undefined });
+            headers: method === 'GET' ? headers : { 'Content-Type': 'application/json' },
+            body: method === 'POST' ? JSON.stringify(consultaFicticia) : undefined });
           assert.equal(response.status, 500);
           assert.deepEqual(await response.json(), { message: 'Error interno del servidor' });
         }
