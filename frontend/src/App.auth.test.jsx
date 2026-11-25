@@ -1,12 +1,13 @@
 import { expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import { leerToken } from './services/authService';
-import { respuestaJson } from './test/fixtures';
+import { formularioFicticio, perfilRepresentanteFicticio, respuestaJson } from './test/fixtures';
 
 const apiBase = 'https://api.ejemplo.invalid';
 const usuario = { id: 1, nombre: 'Cuenta ficticia', email: 'cuenta@ejemplo.invalid', tipo: 'cliente' };
+const perfilCliente = { ...usuario, puedeLeerConsultas: false };
 const credenciales = { email: usuario.email, password: 'ClaveFicticiaDePrueba' };
 const token = 'token-de-sesion-ficticio';
 
@@ -18,7 +19,7 @@ function controlarApi() {
 }
 
 function respuestaLogin() {
-  return respuestaJson({ token, usuario });
+  return respuestaJson({ token, usuario: perfilCliente });
 }
 
 function abrirRuta(ruta) {
@@ -49,6 +50,7 @@ it('crea una cuenta desde el formulario e inicia sesión con las credenciales in
   const user = userEvent.setup();
   render(<App />);
   await user.click(await screen.findByRole('link', { name: 'Registrarse' }));
+  expect(screen.queryByLabelText('Tipo de cuenta:')).not.toBeInTheDocument();
   await registrar(user);
 
   expect(await screen.findByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument();
@@ -58,7 +60,7 @@ it('crea una cuenta desde el formulario e inicia sesión con las credenciales in
   expect(api).toHaveBeenCalledTimes(2);
   expect(api).toHaveBeenNthCalledWith(1, `${apiBase}/auth/register`, expect.objectContaining({ method: 'POST' }));
   expect(JSON.parse(api.mock.calls[0][1].body)).toEqual({
-    nombre: usuario.nombre, ...credenciales, tipo: 'cliente',
+    nombre: usuario.nombre, ...credenciales,
   });
   expect(api).toHaveBeenNthCalledWith(2, `${apiBase}/auth/login`, expect.objectContaining({ method: 'POST' }));
   expect(JSON.parse(api.mock.calls[1][1].body)).toEqual(credenciales);
@@ -81,7 +83,7 @@ it('informa el duplicado y conserva la pantalla de registro sin iniciar sesión'
 it('inicia sesión y recupera el perfil del servidor al volver a montar la aplicación', async () => {
   const api = controlarApi()
     .mockResolvedValueOnce(respuestaLogin())
-    .mockResolvedValueOnce(respuestaJson(usuario));
+    .mockResolvedValueOnce(respuestaJson(perfilCliente));
   const pantalla = abrirRuta('/login');
   await ingresar(userEvent.setup());
 
@@ -154,4 +156,76 @@ it('envía el token al cerrar sesión y vuelve al estado anónimo después del 2
     method: 'POST', headers: { Authorization: `Bearer ${token}` },
   });
   expect(leerToken()).toBe('');
+});
+
+it('el acceso directo anónimo a las consultas no hace peticiones de lectura', async () => {
+  const api = controlarApi();
+  abrirRuta('/consultas');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Iniciá sesión para ver las consultas recibidas.');
+  expect(screen.queryByRole('link', { name: 'Consultas Recibidas' })).not.toBeInTheDocument();
+  expect(api).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['un cliente', perfilCliente],
+  ['un representante sin habilitar', { ...perfilRepresentanteFicticio, puedeLeerConsultas: false }],
+  ['un perfil sin permiso declarado', { ...perfilRepresentanteFicticio, puedeLeerConsultas: undefined }],
+])('el acceso directo de %s consulta el perfil pero no los formularios', async (_caso, perfil) => {
+  sessionStorage.setItem('docker-laws-token', token);
+  const api = controlarApi().mockResolvedValueOnce(respuestaJson(perfil));
+  abrirRuta('/consultas');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Tu cuenta no tiene permiso para ver las consultas recibidas.');
+  expect(screen.queryByRole('link', { name: 'Consultas Recibidas' })).not.toBeInTheDocument();
+  expect(api).toHaveBeenCalledExactlyOnceWith(`${apiBase}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+});
+
+it('espera la restauración del permiso y retira las consultas al cerrar sesión', async () => {
+  sessionStorage.setItem('docker-laws-token', token);
+  let resolverPerfil;
+  const api = controlarApi()
+    .mockImplementationOnce(() => new Promise(resolve => { resolverPerfil = resolve; }))
+    .mockResolvedValueOnce(respuestaJson([formularioFicticio]))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  abrirRuta('/consultas');
+  expect(screen.getByRole('status')).toHaveTextContent('Comprobando la sesión...');
+  expect(api).toHaveBeenCalledTimes(1);
+  resolverPerfil(respuestaJson(perfilRepresentanteFicticio));
+  expect(await screen.findByText(formularioFicticio.email)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Consultas Recibidas' })).toBeInTheDocument();
+  expect(api).toHaveBeenNthCalledWith(2, `${apiBase}/formulario`, { headers: { Authorization: `Bearer ${token}` } });
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar sesión' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Iniciá sesión para ver las consultas recibidas.');
+  expect(screen.queryByText(formularioFicticio.email)).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Consultas Recibidas' })).not.toBeInTheDocument();
+});
+
+it.each([
+  [401, 'Iniciá sesión para ver las consultas recibidas.', ''],
+  [403, 'Tu cuenta no tiene permiso para ver las consultas recibidas.', token],
+])('un GET con HTTP %i retira el acceso y descarta el cuerpo de la respuesta', async (status, mensaje, tokenEsperado) => {
+  sessionStorage.setItem('docker-laws-token', token);
+  const api = controlarApi()
+    .mockResolvedValueOnce(respuestaJson(perfilRepresentanteFicticio))
+    .mockResolvedValueOnce(respuestaJson([formularioFicticio], status));
+  abrirRuta('/consultas');
+  expect(await screen.findByRole('alert')).toHaveTextContent(mensaje);
+  expect(screen.queryByText(formularioFicticio.email)).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Consultas Recibidas' })).not.toBeInTheDocument();
+  expect(leerToken()).toBe(tokenEsperado);
+  expect(api).toHaveBeenCalledTimes(2);
+});
+
+it('descarta una respuesta de consultas que llega después de cerrar sesión', async () => {
+  sessionStorage.setItem('docker-laws-token', token);
+  let resolverListado;
+  controlarApi()
+    .mockResolvedValueOnce(respuestaJson(perfilRepresentanteFicticio))
+    .mockImplementationOnce(() => new Promise(resolve => { resolverListado = resolve; }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  abrirRuta('/consultas');
+  await screen.findByText('Cargando consultas...');
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar sesión' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Iniciá sesión para ver las consultas recibidas.');
+  await act(async () => { resolverListado(respuestaJson([formularioFicticio])); });
+  expect(screen.queryByText(formularioFicticio.email)).not.toBeInTheDocument();
 });

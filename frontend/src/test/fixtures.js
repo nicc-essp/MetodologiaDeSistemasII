@@ -10,6 +10,14 @@ export const consultaFicticia = {
 };
 
 export const formularioFicticio = { id: 1, ...consultaFicticia };
+
+export const perfilRepresentanteFicticio = {
+  id: 41,
+  nombre: 'Representante de prueba',
+  email: 'representante@ejemplo.invalid',
+  tipo: 'representante',
+  puedeLeerConsultas: true,
+};
 export const respuestaJson = (datos, status = 200) => new Response(JSON.stringify(datos), {
   status, headers: { 'Content-Type': 'application/json' },
 });

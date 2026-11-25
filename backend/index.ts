@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Sequelize } from 'sequelize';
 import { createApp } from './app';
-import { parsearOrigenes } from './config/app.config';
+import { parsearIdsRepresentantes, parsearOrigenes } from './config/app.config';
 import { leerConfiguracionPostgres } from './config/database.config';
 import { crearConexionPostgres } from './database/connection';
 import { prepararAlmacenPostgres } from './data/formularios-postgres';
@@ -14,8 +14,9 @@ export async function iniciarServidor({ env = process.env, puerto = 3001, host =
   env?: NodeJS.ProcessEnv; puerto?: number; host?: string;
 } = {}) {
   let conexion: Sequelize | undefined;
-  let etapa = 'validar la configuración CORS y PostgreSQL';
+  let etapa = 'validar la configuración CORS, PostgreSQL y AUTH_REPRESENTANTES_IDS';
   try {
+    const representantesHabilitados = parsearIdsRepresentantes(env.AUTH_REPRESENTANTES_IDS);
     const allowedOrigins = parsearOrigenes(env.CORS_ORIGINS);
     const config = leerConfiguracionPostgres('aplicacion', env);
     conexion = crearConexionPostgres(config);
@@ -25,7 +26,7 @@ export async function iniciarServidor({ env = process.env, puerto = 3001, host =
     const almacen = await prepararAlmacenPostgres(conexion);
     etapa = 'comprobar el esquema y los permisos de cuentas (ejecutá db:migrate explícitamente)';
     const cuentas = await prepararAlmacenCuentasPostgres(conexion);
-    const servidor = createServer(createApp({ almacen, cuentas, allowedOrigins }));
+    const servidor = createServer(createApp({ almacen, cuentas, allowedOrigins, representantesHabilitados }));
     etapa = 'abrir el puerto HTTP';
     await new Promise<void>((resolve, reject) => {
       servidor.once('error', reject);

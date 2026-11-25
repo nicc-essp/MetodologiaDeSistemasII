@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "db:migrate": "node --env-file-if-exists=../.env --import tsx database/migrate.ts up",
     "db:status": "node --env-file-if-exists=../.env --import tsx database/migrate.ts status",
+    "cuenta:crear-representante": "node --env-file-if-exists=../.env --import tsx scripts/crear-representante.ts",
     "test:postgres": "node ../scripts/verificar-migraciones.mjs"
   },
   "keywords": [],

@@ -46,6 +46,10 @@ export function leerToken() {
   return sessionStorage.getItem(claveToken) || '';
 }
 
+export function borrarToken() {
+  sessionStorage.removeItem(claveToken);
+}
+
 export function encabezadosAuth(headers = {}) {
   const token = leerToken();
   return token ? { ...headers, Authorization: `Bearer ${token}` } : { ...headers };
@@ -120,7 +124,7 @@ export async function obtenerUsuarioActual() {
     return usuario;
   } catch (error) {
     if (error instanceof ErrorCuenta && error.categoria === 'validacion') {
-      sessionStorage.removeItem(claveToken);
+      borrarToken();
       return null;
     }
     throw error;
@@ -132,5 +136,5 @@ export async function cerrarSesion() {
   if (token) {
     await solicitar(urlAuth('/logout'), { method: 'POST', headers: encabezadosAuth() }, 204);
   }
-  sessionStorage.removeItem(claveToken);
+  borrarToken();
 }

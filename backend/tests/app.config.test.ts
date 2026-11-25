@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsearOrigenes } from '../config/app.config';
+import { parsearIdsRepresentantes, parsearOrigenes } from '../config/app.config';
 
 for (const valor of [undefined, '', ' \t\n']) {
   test(`CORS default con ${JSON.stringify(valor)}`, () => {
@@ -46,5 +46,24 @@ test('el parser no consulta process.env implícitamente', () => {
   } finally {
     if (anterior === undefined) delete process.env.CORS_ORIGINS;
     else process.env.CORS_ORIGINS = anterior;
+  }
+});
+
+test('una lista ausente, vacía o en blanco habilita cero representantes', () => {
+  for (const valor of [undefined, '', ' \t\n']) {
+    assert.deepEqual(parsearIdsRepresentantes(valor), new Set());
+  }
+});
+
+test('la lista admite IDs positivos INTEGER, espacios y duplicados', () => {
+  assert.deepEqual(parsearIdsRepresentantes(' 1, 2147483647, 1 '), new Set([1, 2147483647]));
+});
+
+test('un valor inválido rechaza la lista completa sin reproducir su contenido', () => {
+  for (const valor of ['0', '-1', '+1', '01', '1.0', '1e1', '0x1', '2147483648', '1,',
+    ',1', '1,,2', '1 2', '1,valor-ficticio-no-publicable']) {
+    assert.throws(() => parsearIdsRepresentantes(valor), {
+      message: 'AUTH_REPRESENTANTES_IDS debe contener IDs enteros positivos de PostgreSQL separados por comas.',
+    });
   }
 });

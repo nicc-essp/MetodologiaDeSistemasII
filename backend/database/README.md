@@ -34,7 +34,7 @@ pnpm --dir backend db:status
 pnpm --dir backend start
 ```
 
-Los comandos `start` y `db:*` cargan el `.env` opcional de la raíz con Node, sin agregar dotenv; las variables del proceso tienen prioridad. Se reutilizan `POSTGRES_DB`, `POSTGRES_PORT` y `POSTGRES_SECRETS_DIR` de P03, más `POSTGRES_HOST` para el cliente. Predeterminados: `127.0.0.1:5433`, `docker_laws_dev`, `secrets/postgres/`. Una ruta relativa de secretos se interpreta desde la raíz del repositorio. `.env.example` contiene parámetros públicos; las contraseñas siguen en archivos privados ignorados y no se imprimen.
+Los comandos `start`, `db:*` y `cuenta:crear-representante` cargan el `.env` opcional de la raíz con Node; las variables del proceso tienen prioridad. Se reutilizan `POSTGRES_DB`, `POSTGRES_PORT` y `POSTGRES_SECRETS_DIR` de P03, más `POSTGRES_HOST` para el cliente. Predeterminados: `127.0.0.1:5433`, `docker_laws_dev`, `secrets/postgres/`. Una ruta relativa de secretos se interpreta desde la raíz del repositorio. `.env.example` contiene parámetros públicos; las contraseñas siguen en archivos privados ignorados y no se imprimen.
 
 El preparador genera las claves en `secrets/postgres/` de esta copia; no importa claves ajenas ni las rota en una instancia inicializada. Los comandos anteriores utilizan el proyecto Compose de esa carpeta. Para ensayar desde cero sin reutilizar recursos habituales, seguir la [secuencia aislada del checklist](../../docs/CHECKLIST.md#134-secuencia-powershell-para-la-próxima-reproducción-limpia-pendiente); todavía no fue ejecutada. En la modalidad con aplicaciones en el host solo PostgreSQL requiere Docker; en la modalidad Compose los tres servicios se ejecutan en contenedores. Ver [README principal](../../README.md#instalación-e-inicio).
 
@@ -44,7 +44,7 @@ El esquema `app` debe existir y pertenecer al migrador: lo prepara P03 sobre vol
 
 ## Arranque, API y cierre — P04.3
 
-`index.ts` valida CORS/configuración, autentica el rol de aplicación y prepara `data/formularios-postgres.ts` antes de abrir HTTP. El adaptador comprueba las ocho columnas, tipos, clave primaria y generación de ID, acceso de lectura, permisos de inserción/secuencia y existencia del historial técnico. Solo consulta metadatos de ese historial: sus registros siguen reservados al migrador y se revisan con `db:status`. No ejecuta migraciones ni `sync()` de negocio.
+`index.ts` valida CORS, PostgreSQL y la lista de representantes habilitados, autentica el rol de aplicación y prepara los almacenes de consultas y cuentas antes de abrir HTTP. El adaptador de consultas comprueba las ocho columnas, tipos, clave primaria y generación de ID, acceso de lectura, permisos de inserción/secuencia y existencia del historial técnico. Solo consulta metadatos de ese historial: sus registros siguen reservados al migrador y se revisan con `db:status`. Las migraciones se ejecutan de forma explícita.
 
 El adaptador cumple `AlmacenFormularios`: crear, listar por ID ascendente y buscar por ID. Proyecta objetos públicos con ID y los siete textos, sin instancias Sequelize. Conserva la conversión histórica de IDs y devuelve 404 para valores inexistentes, fraccionarios, no finitos o fuera de INTEGER. PostgreSQL comienza sin seed; recrear el backend no borra consultas.
 
@@ -55,6 +55,21 @@ NUL y sustitutos Unicode aislados se rechazan con HTTP 400 en los siete textos, 
 SIGINT/SIGTERM cierran primero HTTP y después el pool Sequelize; el cierre es idempotente. Las solicitudes HTTP tienen hasta cinco segundos para finalizar antes de cerrar sus conexiones. En Docker Node es el proceso principal para recibir las señales directamente.
 
 Para ejecutar el stack completo, aplicar primero la migración desde el host y después usar `docker compose up --build`. PostgreSQL ya es una dependencia normal, sin perfil optativo. Compose entrega al backend `POSTGRES_HOST=postgres`, puerto interno 5432 y **solo** el secreto de aplicación montado como `/run/secrets/postgres/app.txt`. Las claves de administrador/migrador no se montan en ese servicio. El puerto 5433 permanece local para herramientas del host. Todos los puertos publicados siguen limitados a `127.0.0.1`.
+
+## Alta privada de un representante ficticio
+
+1. Preparar PostgreSQL local con datos ficticios y aplicar `001` y `002` explícitamente. Ejecutar el alta desde el host con `POSTGRES_TARGET=local`, una dirección de loopback literal (`127.0.0.1` o `::1`) y las credenciales privadas de `docker_laws_app`.
+2. Crear `secrets/representante-local.json` en UTF-8. La carpeta `secrets/` está excluida de Git. El objeto contiene `nombre`, `email` y `password`; usar un correo ficticio como `representante@ejemplo.invalid` y una contraseña ficticia inédita de al menos ocho caracteres.
+3. Desde la raíz del repositorio, ejecutar el comando con la ruta del archivo privado.
+
+   ```powershell
+   $archivoRepresentante = (Resolve-Path -LiteralPath './secrets/representante-local.json').Path
+   pnpm --dir backend cuenta:crear-representante $archivoRepresentante
+   ```
+
+4. El comando muestra el ID de la cuenta creada. Agregar solo ese ID a `AUTH_REPRESENTANTES_IDS` en el `.env` local, como entero positivo o en una lista separada por comas. Reiniciar el backend con esa configuración o recrear su servicio en Compose para que reciba la variable. Iniciar sesión y verificar el acceso a las consultas ficticias.
+
+El alta utiliza bcrypt y el permiso `INSERT` del rol de aplicación. Ante duplicados, sale con error y conserva la cuenta existente. La contraseña se lee del archivo y el comando entrega únicamente el ID de la cuenta en caso de éxito. La lista de habilitación pertenece a una base concreta: dejarla vacía al cambiar o recrear la base y volver a registrar los nuevos IDs por este procedimiento. El comando solo admite PostgreSQL local. El acceso completo cubre exclusivamente la demostración académica con datos ficticios; el uso productivo requiere permisos de acceso por registro.
 
 ## Esquema, historial y permisos
 
@@ -218,6 +233,6 @@ Ninguna prueba sintética o handshake en loopback acredita Supabase. La evidenci
 
 **Criterios de cierre:** contrato asíncrono y rutas/JSON existentes, búsqueda por ID, idempotencia de migración, concurrencia, validaciones, fallos seguros y recuperación controlada se acreditaron mediante la regresión local. La primera migración remota, roles/TLS y flujo real con persistencia se acreditan mediante la evidencia de Homero. No se afirma que las suites locales se hayan ejecutado contra Supabase, que haya habido una segunda migración remota ni que se hayan realizado pruebas destructivas remotas. Con ambos hitos cubiertos, **P04 está técnicamente completada**. P01 y P02 también están completadas y aprobadas por su auditoría independiente, registrada en planificación; ese cierre documental no añade resultados a la validación Supabase.
 
-**Límites operativos:** la base remota es operativa para el prototipo de desarrollo; la aplicación no está desplegada públicamente. Continúan pendientes autenticación y autorización de usuarios, reglas de acceso a consultas y decisiones de despliegue, Caddy y HTTPS de la aplicación. El TLS verificado hacia PostgreSQL no acredita HTTPS del sitio. Se mantienen datos ficticios, credenciales en archivos privados excluidos de Git, ejecución explícita de migraciones con confirmación del proyecto y prohibición de dirigir los inicializadores, suites y limpiezas locales hacia Supabase. No se publican secretos ni se autoriza uso productivo por este cierre.
+**Límites operativos:** P04.4b acreditó el uso de la base remota desde el prototipo local. Las cuentas y el acceso a consultas de INC-04 tienen su propia verificación con PostgreSQL local. La publicación y HTTPS de la aplicación dependen del [plan de seguridad y despliegue](../../docs/PLAN-SEGURIDAD-DESPLIEGUE.md). Se mantienen datos ficticios, credenciales en archivos privados excluidos de Git y migraciones explícitas con confirmación del proyecto. Los inicializadores, suites y limpiezas se ejecutan únicamente sobre los destinos locales previstos.
 
 Fuentes oficiales consultadas: [modos de conexión Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres), [verificación TLS](https://supabase.com/docs/guides/platform/ssl-enforcement), [configuración SSL de pg y advertencia sobre URLs](https://node-postgres.com/features/ssl) y [seguridad de la Data API](https://supabase.com/docs/guides/api/securing-your-api).

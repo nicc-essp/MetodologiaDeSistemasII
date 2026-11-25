@@ -13,16 +13,19 @@ import { prepararAlmacenPostgres } from '../data/formularios-postgres';
 import type { Formulario } from '../models/formulario';
 import { consultaFicticia } from './helpers/fixtures';
 import { withHttp } from './helpers/http';
-import { comprobarDestinoDescartable, ejecutarCli } from './helpers/postgres';
+import { comprobarDestinoDescartable, ejecutarAltaRepresentante, ejecutarCli } from './helpers/postgres';
+import { autenticarRepresentante, datosRepresentanteFicticio, encabezadosBearer, iniciarSesionFicticia, representanteEnMemoria } from './helpers/auth';
 
 test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y cierre', { timeout: 90000 }, async t => {
   comprobarDestinoDescartable();
-  const env = { ...process.env, CORS_ORIGINS: 'http://localhost:5173' };
+  const env = { ...process.env, CORS_ORIGINS: 'http://localhost:5173', AUTH_REPRESENTANTES_IDS: '' };
   const migrador = crearConexionPostgres(leerConfiguracionPostgres('migrador', env));
   let servicio: Awaited<ReturnType<typeof iniciarServidor>> | undefined;
+  let headersRepresentante: Record<string, string>;
   const url = () => `http://127.0.0.1:${(servicio!.servidor.address() as AddressInfo).port}`;
+  const leer = (ruta = '/formulario') => fetch(`${url()}${ruta}`, { headers: headersRepresentante });
   const listar = async () => {
-    const response = await fetch(`${url()}/formulario`);
+    const response = await leer();
     assert.equal(response.status, 200);
     const datos: unknown = await response.json();
     assert.ok(Array.isArray(datos));
@@ -45,13 +48,49 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
     });
 
     assert.equal(ejecutarCli('up'), `Migraciones aplicadas: ${migracionInicial}, ${migracionUsuarios}`);
+    const altaPrivada = ejecutarAltaRepresentante(datosRepresentanteFicticio);
+    assert.ifError(altaPrivada.error);
+    assert.equal(altaPrivada.status, 0, altaPrivada.stderr);
+    assert.equal(altaPrivada.stderr, '');
+    assert.match(altaPrivada.stdout.trim(), /^[1-9][0-9]*$/);
+    const idRepresentante = Number(altaPrivada.stdout.trim());
+
+    await t.test('el comando privado rechaza un duplicado y el rol persistido solo no habilita consultas', async () => {
+      const duplicado = ejecutarAltaRepresentante({ ...datosRepresentanteFicticio, password: 'OtraClaveFicticia' });
+      assert.ifError(duplicado.error);
+      assert.equal(duplicado.status, 1);
+      assert.equal(duplicado.stdout, '');
+      assert.equal(duplicado.stderr.trim(), 'Ya existe una cuenta con ese correo. El alta se canceló.');
+      const sinHabilitacion = await iniciarServidor({ env, puerto: 0, host: '127.0.0.1' });
+      try {
+        const port = (sinHabilitacion.servidor.address() as AddressInfo).port;
+        const base = `http://127.0.0.1:${port}`;
+        const { token, usuario } = await iniciarSesionFicticia(base);
+        assert.equal(usuario.id, idRepresentante);
+        assert.equal(usuario.tipo, 'representante');
+        assert.equal(usuario.puedeLeerConsultas, false);
+        for (const ruta of ['/formulario', '/formulario/1']) {
+          const respuesta = await fetch(`${base}${ruta}`, { headers: encabezadosBearer(token) });
+          assert.equal(respuesta.status, 403);
+          assert.deepEqual(await respuesta.json(), { message: 'No tiene permiso para consultar los formularios' });
+        }
+      } finally {
+        await sinHabilitacion.cerrar();
+      }
+    });
+
+    env.AUTH_REPRESENTANTES_IDS = String(idRepresentante);
     servicio = await iniciarServidor({ env, puerto: 0, host: '127.0.0.1' });
+    headersRepresentante = await autenticarRepresentante(url());
     await t.test('el arranque migrado comienza vacío y mantiene health y CORS', async () => {
       assert.deepEqual(await listar(), []);
       const health = await fetch(`${url()}/health`);
       assert.equal(health.status, 200);
       assert.deepEqual(await health.json(), { status: 'ok' });
-      const response = await fetch(`${url()}/formulario`, { headers: { Origin: 'http://localhost:5173' } });
+      const response = await fetch(`${url()}/formulario`, {
+        headers: { ...headersRepresentante, Origin: 'http://localhost:5173' },
+      });
+      assert.equal(response.status, 200);
       assert.equal(response.headers.get('access-control-allow-origin'), 'http://localhost:5173');
     });
 
@@ -69,12 +108,12 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
 
     await t.test('detalle mantiene conversiones históricas y 404 para IDs inválidos/inexistentes', async () => {
       for (const id of [String(primero!.id), `0${primero!.id}`, `${primero!.id}.0`, `${primero!.id}e0`]) {
-        const response = await fetch(`${url()}/formulario/${id}`);
+        const response = await leer(`/formulario/${id}`);
         assert.equal(response.status, 200);
         assert.deepEqual(await response.json(), primero!);
       }
       for (const id of ['abc', 'NaN', 'Infinity', '-Infinity', '1.5', '0', '-1', '2147483647', '2147483648', '-2147483649', '999999999999999999999999']) {
-        const response = await fetch(`${url()}/formulario/${id}`);
+        const response = await leer(`/formulario/${id}`);
         assert.equal(response.status, 404, id);
         assert.deepEqual(await response.json(), { message: 'Formulario no encontrado' });
       }
@@ -119,6 +158,8 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
       assert.equal(servicio!.servidor.listening, false);
       await assert.rejects(fetch(`${anterior}/health`, { signal: AbortSignal.timeout(2000) }));
       servicio = await iniciarServidor({ env, puerto: 0, host: '127.0.0.1' });
+      assert.equal((await leer()).status, 401);
+      headersRepresentante = await autenticarRepresentante(url());
       assert.deepEqual(await listar(), antes);
     });
 
@@ -126,7 +167,7 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
       const antes = await listar();
       await migrador.query('REVOKE SELECT ON TABLE app.consultas FROM docker_laws_app');
       try {
-        const response = await fetch(`${url()}/formulario`);
+        const response = await leer();
         assert.equal(response.status, 500);
         assert.deepEqual(await response.json(), { message: 'Error interno del servidor' });
       } finally {
@@ -153,10 +194,12 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
         almacen = await prepararAlmacenPostgres(conexion);
       } finally { await conexion.close(); }
       const antes = await listar();
-      await withHttp(createApp({ almacen }), async base => {
+      await withHttp(createApp({ ...representanteEnMemoria(), almacen }), async base => {
+        const headers = await autenticarRepresentante(base);
         for (const [method, ruta] of [['GET', '/formulario'], ['GET', `/formulario/${primero!.id}`], ['POST', '/formulario']]) {
           const response = await fetch(`${base}${ruta}`, { method,
-            headers: { 'Content-Type': 'application/json' }, body: method === 'POST' ? JSON.stringify(consultaFicticia) : undefined });
+            headers: method === 'GET' ? headers : { 'Content-Type': 'application/json' },
+            body: method === 'POST' ? JSON.stringify(consultaFicticia) : undefined });
           assert.equal(response.status, 500);
           assert.deepEqual(await response.json(), { message: 'Error interno del servidor' });
         }

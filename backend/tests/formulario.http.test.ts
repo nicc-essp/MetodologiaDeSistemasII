@@ -6,10 +6,12 @@ import { crearAlmacenFormularios } from '../data/formularios-guardados';
 import type { AlmacenFormularios } from '../data/formularios-guardados';
 import { withHttp } from './helpers/http';
 import { consultaFicticia } from './helpers/fixtures';
+import { autenticarRepresentante, representanteEnMemoria } from './helpers/auth';
 
 test('HTTP: creación, listado, detalle, extras ignorados y health', async () => {
-  await withHttp(createApp({ almacen: crearAlmacenFormularios([]) }), async base => {
-    const inicial = await fetch(`${base}/formulario`);
+  await withHttp(createApp({ ...representanteEnMemoria(), almacen: crearAlmacenFormularios([]) }), async base => {
+    const headers = await autenticarRepresentante(base);
+    const inicial = await fetch(`${base}/formulario`, { headers });
     assert.equal(inicial.status, 200);
     assert.deepEqual(await inicial.json(), []);
     const response = await fetch(`${base}/formulario`, {
@@ -19,14 +21,14 @@ test('HTTP: creación, listado, detalle, extras ignorados y health', async () =>
     assert.equal(response.status, 201);
     const esperado = { id: 1, ...consultaFicticia };
     assert.deepEqual(await response.json(), esperado);
-    assert.deepEqual(await (await fetch(`${base}/formulario`)).json(), [esperado]);
+    assert.deepEqual(await (await fetch(`${base}/formulario`, { headers })).json(), [esperado]);
     for (const id of ['1', '01', '1.0', '1e0']) {
-      const detalle = await fetch(`${base}/formulario/${id}`);
+      const detalle = await fetch(`${base}/formulario/${id}`, { headers });
       assert.equal(detalle.status, 200);
       assert.deepEqual(await detalle.json(), esperado);
     }
     for (const id of ['999', 'abc']) {
-      const detalle = await fetch(`${base}/formulario/${id}`);
+      const detalle = await fetch(`${base}/formulario/${id}`, { headers });
       assert.equal(detalle.status, 404);
       assert.deepEqual(await detalle.json(), { message: 'Formulario no encontrado' });
     }
@@ -37,7 +39,7 @@ test('HTTP: creación, listado, detalle, extras ignorados y health', async () =>
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(consultaFicticia),
     });
     assert.deepEqual(await siguiente.json(), { id: 2, ...consultaFicticia });
-    assert.deepEqual(await (await fetch(`${base}/formulario`)).json(), [esperado, { id: 2, ...consultaFicticia }]);
+    assert.deepEqual(await (await fetch(`${base}/formulario`, { headers })).json(), [esperado, { id: 2, ...consultaFicticia }]);
   });
 });
 
@@ -62,7 +64,8 @@ test('HTTP espera el almacenamiento asíncrono en creación, listado y búsqueda
       return formulario;
     },
   };
-  await withHttp(createApp({ almacen }), async base => {
+  await withHttp(createApp({ ...representanteEnMemoria(), almacen }), async base => {
+    const autorizacion = await autenticarRepresentante(base);
     for (const caso of [
       { method: 'GET', ruta: '/formulario', status: 200, respuesta: [formulario] },
       { method: 'GET', ruta: '/formulario/7', status: 200, respuesta: formulario },
@@ -71,7 +74,7 @@ test('HTTP espera el almacenamiento asíncrono en creación, listado y búsqueda
     ]) {
       const response = await fetch(`${base}${caso.ruta}`, {
         method: caso.method, signal: t.signal,
-        headers: { 'Content-Type': 'application/json' },
+        headers: caso.method === 'GET' ? autorizacion : { 'Content-Type': 'application/json' },
         body: caso.method === 'POST' ? JSON.stringify(consultaFicticia) : undefined,
       });
       assert.equal(response.status, caso.status);
@@ -84,7 +87,7 @@ test('HTTP espera el almacenamiento asíncrono en creación, listado y búsqueda
 async function comprobarRechazo(body: string | undefined, status = 400, contentType = 'application/json') {
   const almacen = crearAlmacenFormularios([{ id: 7, ...consultaFicticia }]);
   const antes = await almacen.listar();
-  await withHttp(createApp({ almacen }), async base => {
+  await withHttp(createApp({ ...representanteEnMemoria(), almacen }), async base => {
     const response = await fetch(`${base}/formulario`, {
       method: 'POST', headers: { 'Content-Type': contentType }, body,
     });
@@ -94,7 +97,8 @@ async function comprobarRechazo(body: string | undefined, status = 400, contentT
     assert.equal(typeof error.message, 'string');
     assert.deepEqual(Object.keys(error), ['message']);
     assert.deepEqual(await almacen.listar(), antes);
-    assert.deepEqual(await (await fetch(`${base}/formulario`)).json(), antes);
+    const headers = await autenticarRepresentante(base);
+    assert.deepEqual(await (await fetch(`${base}/formulario`, { headers })).json(), antes);
     const siguiente = await fetch(`${base}/formulario`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(consultaFicticia),
     });
@@ -206,10 +210,11 @@ for (const [operacion, method, ruta] of [
         throw new Error('detalle interno ficticio');
       },
     };
-    await withHttp(createApp({ almacen: conFallo }), async base => {
+    await withHttp(createApp({ ...representanteEnMemoria(), almacen: conFallo }), async base => {
+      const headers = method === 'GET' ? await autenticarRepresentante(base) : { 'Content-Type': 'application/json' };
       const response = await fetch(`${base}${ruta}`, {
         method, signal: t.signal,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: method === 'POST' ? JSON.stringify(consultaFicticia) : undefined,
       });
       assert.equal(response.status, 500);
@@ -221,8 +226,9 @@ for (const [operacion, method, ruta] of [
 
 test('HTTP CORS: permitidos, denegados, preflight y sin Origin', async () => {
   for (const origen of ['http://localhost:5173', 'http://127.0.0.1:5173']) {
-    await withHttp(createApp({ allowedOrigins: [origen] }), async base => {
-      const permitido = await fetch(`${base}/formulario`, { headers: { Origin: origen } });
+    await withHttp(createApp({ ...representanteEnMemoria(), allowedOrigins: [origen] }), async base => {
+      const headers = await autenticarRepresentante(base);
+      const permitido = await fetch(`${base}/formulario`, { headers: { ...headers, Origin: origen } });
       assert.equal(permitido.status, 200);
       assert.equal(permitido.headers.get('access-control-allow-origin'), origen);
       const preflight = await fetch(`${base}/formulario`, { method: 'OPTIONS', headers: {
@@ -231,10 +237,15 @@ test('HTTP CORS: permitidos, denegados, preflight y sin Origin', async () => {
       assert.equal(preflight.status, 204);
       assert.equal(preflight.headers.get('access-control-allow-origin'), origen);
       assert.match(preflight.headers.get('access-control-allow-methods') ?? '', /POST/);
-      const denegado = await fetch(`${base}/formulario`, { headers: { Origin: 'https://no-permitido.invalid' } });
+      const preflightLectura = await fetch(`${base}/formulario`, { method: 'OPTIONS', headers: {
+        Origin: origen, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization',
+      } });
+      assert.equal(preflightLectura.status, 204);
+      assert.match(preflightLectura.headers.get('access-control-allow-headers') ?? '', /authorization/i);
+      const denegado = await fetch(`${base}/formulario`, { headers: { ...headers, Origin: 'https://no-permitido.invalid' } });
       assert.equal(denegado.status, 200);
       assert.equal(denegado.headers.get('access-control-allow-origin'), null);
-      const sinOrigen = await fetch(`${base}/formulario`);
+      const sinOrigen = await fetch(`${base}/formulario`, { headers });
       assert.equal(sinOrigen.status, 200);
       assert.equal(sinOrigen.headers.get('access-control-allow-origin'), null);
     });

@@ -1,6 +1,6 @@
 # Frontend de Docker-laws
 
-Interfaz React y JavaScript con Vite. Incluye inicio, envío de consultas jurídicas y listado de consultas recibidas. Las llamadas HTTP están centralizadas en `src/services/formularioService.js`; las cuentas, los casos y la comunicación con representantes todavía no están implementados.
+Interfaz React y JavaScript con Vite. Incluye inicio, envío público de consultas jurídicas, registro de clientes, inicio y cierre de sesión y listado para representantes habilitados. Los servicios `src/services/formularioService.js` y `src/services/authService.js` centralizan las llamadas a la API.
 
 Desde la raíz del repositorio, con Node 22 desde 22.22.2 y pnpm 12.3.4:
 
@@ -9,7 +9,7 @@ pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend dev --host localhost --port 5173 --strictPort
 ```
 
-Abrir `http://localhost:5173`. Para enviar y recuperar consultas se necesita la API en `http://localhost:3001` y PostgreSQL preparado con su migración explícita; Vite por sí solo no inicia esos servicios. `VITE_API_BASE_URL` permite cambiar el destino público de la API; el origen desde el que se abre la interfaz debe estar permitido en `CORS_ORIGINS` del backend. Usar únicamente datos ficticios: no hay autenticación ni autorización funcional de usuarios.
+Abrir `http://localhost:5173`. Para enviar o recuperar consultas se necesita la API en `http://localhost:3001` y PostgreSQL con las migraciones aplicadas explícitamente. `VITE_API_BASE_URL` configura el destino público de la API. El origen de la interfaz debe estar permitido en `CORS_ORIGINS`. Para abrir «Consultas recibidas», iniciar sesión con un [representante ficticio habilitado](../backend/database/README.md#alta-privada-de-un-representante-ficticio). React refleja el permiso otorgado por Express y envía el token en las lecturas. Usar exclusivamente datos ficticios.
 
 Comprobaciones disponibles, también desde la raíz:
 

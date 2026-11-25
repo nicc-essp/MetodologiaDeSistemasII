@@ -22,7 +22,9 @@ export function Navbar() {
 
       <nav className="nav-links">
         <Link to="/">Inicio</Link>
-        <Link to="/consultas">Consultas Recibidas</Link>
+        {!cargando && usuario?.puedeLeerConsultas === true && (
+          <Link to="/consultas">Consultas Recibidas</Link>
+        )}
         <Link to="/consulta-juridica">Consulta Jurídica</Link>
         {!cargando && usuario ? (
           <>

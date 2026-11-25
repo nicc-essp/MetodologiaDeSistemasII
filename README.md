@@ -6,9 +6,9 @@ Aplicación web full stack desarrollada para el estudio jurídico ficticio **Doc
 
 El proyecto busca ofrecer información sobre los servicios del estudio y permitir que los clientes realicen consultas jurídicas desde la aplicación.
 
-Actualmente se encuentra implementado el flujo de formularios de consulta: un usuario puede completar y enviar una consulta desde el frontend, el backend la guarda en PostgreSQL mediante Sequelize y las consultas recibidas pueden visualizarse desde otra sección de la aplicación. La persistencia está verificada tanto localmente como contra un proyecto Supabase exclusivo de desarrollo.
+El formulario público permite enviar consultas jurídicas, que el backend guarda en PostgreSQL mediante Sequelize. En la demostración académica, solo los representantes habilitados pueden ver las consultas recibidas. La persistencia de formularios se verificó localmente y en un proyecto Supabase de desarrollo durante P04.4b; la autorización de INC-04 se verifica por separado en local.
 
-El proyecto se encuentra en desarrollo. **P01–P04 están completadas y aprobadas para el incremento inicial de persistencia de consultas**: P01/P02 por su auditoría formal independiente, P03 por su revisión de infraestructura y P04 por sus hitos local y Supabase de desarrollo. P04.4b fue validada y aprobada por Homero el 18 de noviembre de 2026. Las cuentas de clientes, la autorización funcional, el seguimiento de casos y el despliegue público continúan pendientes; P05–P13 no se consideran completadas.
+El proyecto se encuentra en desarrollo. **P01–P04 están completadas y aprobadas para el incremento inicial de persistencia de consultas**: P01/P02 por su auditoría formal independiente, P03 por su revisión de infraestructura y P04 por sus hitos local y Supabase de desarrollo. P04.4b fue validada y aprobada por Homero el 18 de noviembre de 2026. El registro, las sesiones y la autorización para la demostración se documentan en el [plan de seguridad y despliegue](docs/PLAN-SEGURIDAD-DESPLIEGUE.md). El endurecimiento de cuentas y sesiones, el seguimiento de casos y el despliegue público siguen pendientes.
 
 ## Estado actual
 
@@ -17,9 +17,9 @@ Actualmente se encuentran implementadas:
 - Interfaz web desarrollada con React y Vite.
 - Formulario de consultas jurídicas.
 - API desarrollada con Express.
-- Creación de formularios mediante `POST /formulario`.
-- Consulta de todos los formularios mediante `GET /formulario`.
-- Consulta de un formulario mediante `GET /formulario/:id`.
+- Creación pública de formularios mediante `POST /formulario`.
+- Listado y detalle de formularios para representantes habilitados, mediante `GET /formulario` y `GET /formulario/:id`.
+- Registro público de clientes e inicio y cierre de sesión.
 - Endpoint de estado del backend mediante `GET /health`.
 - Vista de consultas recibidas conectada a la API.
 - Separación de las llamadas HTTP del frontend mediante `formularioService.js`.
@@ -45,7 +45,6 @@ El arranque normal utiliza **PostgreSQL mediante Sequelize**, conserva los datos
 Como parte de la evolución del proyecto se prevé incorporar:
 
 - **Caddy** como proxy inverso y para configuración HTTPS.
-- Sistema de cuentas de clientes.
 - Seguimiento de casos y comunicación con representantes.
 
 Estas funcionalidades todavía no forman parte de la implementación actual. Su incorporación y la elección definitiva de tecnologías requieren consignas y decisiones aprobadas; no son parte de la corrección de deuda técnica.
@@ -116,7 +115,7 @@ git branch --show-current
 git rev-parse HEAD
 ```
 
-#### 2. Preparar PostgreSQL y aplicar la migración explícita
+#### 2. Preparar PostgreSQL y aplicar las migraciones explícitas
 
 Con Docker instalado y en ejecución, preparar las claves privadas de P03 y las herramientas del backend:
 
@@ -127,7 +126,7 @@ docker compose up -d --wait postgres
 pnpm --dir backend db:migrate
 ```
 
-La migración se ejecuta desde el host con el rol migrador. El backend del contenedor recibe únicamente el secreto de aplicación. No se eliminan volúmenes para repetir la preparación.
+Las migraciones se ejecutan desde el host con el rol migrador y registran `001-crear-consultas` y `002-crear-usuarios`. El backend del contenedor recibe únicamente el secreto de aplicación. Para actualizar desde `001`, seguir el [procedimiento local](backend/database/README.md#actualización-local-de-001-a-002).
 
 #### 3. Construir e iniciar la aplicación
 
@@ -147,10 +146,9 @@ El backend espera disponibilidad de PostgreSQL y verifica esquema/permisos antes
 
 ```powershell
 Invoke-RestMethod http://localhost:3001/health
-(Invoke-WebRequest -UseBasicParsing -Uri http://localhost:3001/formulario).Content
 ```
 
-El primer comando debe indicar el estado del proceso; no comprueba continuamente la base. El segundo debe devolver `[]` en una base nueva. Abrir el frontend y comprobar creación/listado solo con datos ficticios. Los puertos 5173, 3001 y 5433 deben estar disponibles; si están ocupados, no detener procesos ajenos.
+El health informa el estado del proceso. Abrir el frontend y probar el envío de una consulta ficticia. Para comprobar el listado o el detalle, iniciar sesión con un [representante habilitado](backend/database/README.md#alta-privada-de-un-representante-ficticio). En una base nueva, el listado autorizado estará vacío antes del primer envío. Los puertos 5173, 3001 y 5433 deben estar disponibles; si están ocupados, no detener procesos ajenos.
 
 Para detenerlos:
 
@@ -166,7 +164,7 @@ P03 está completada y aprobada; P04 está técnicamente completada tras la apro
 
 P04.4a incorpora la selección explícita `local`/`supabase-dev`, los usuarios directos o session pooler y TLS con CA y comprobación de nombre. **P04.4b fue verificada y aprobada por Homero**, mediante Session pooler en el puerto 5432, PostgreSQL 17.12, Data API desactivada y SSL obligatorio. La migración `001-crear-consultas`, sus objetos e historial y los permisos separados de aplicación/migrador fueron verificados. Con React y Express ejecutándose localmente, se comprobó el listado inicialmente vacío, el envío de un formulario ficticio, su registro con ID 1 por HTTP y SQL Editor y su conservación tras reiniciar únicamente el backend. Esta es evidencia aportada por el usuario; no se repitió durante la actualización documental.
 
-**Una base remota operativa no constituye un despliegue público de la aplicación.** No hay autenticación ni autorización de usuarios para consultar formularios; mantener datos ficticios y acceso controlado. Compose continúa siendo local. La [guía de persistencia](backend/database/README.md) distingue evidencia automatizada local y validación remota, y conserva las protecciones de credenciales y migraciones. No reutilizar las suites de pruebas o limpieza locales contra Supabase ni repetir operaciones remotas sin autorización específica.
+El hito remoto acreditó el acceso a la base desde una aplicación ejecutada localmente. La autorización de consultas se verifica con PostgreSQL local y datos ficticios. La [guía de persistencia](backend/database/README.md) distingue la evidencia de ambos entornos. Las suites y limpiezas están destinadas a instancias locales descartables; la publicación y las operaciones sobre Supabase requieren autorización específica.
 
 Se utiliza `postgres:17.12-bookworm`, fijado por [digest del índice oficial de imágenes](https://github.com/docker-library/repo-info/blob/master/repos/postgres/remote/17.12-bookworm.md). El servicio de desarrollo tiene un volumen nombrado `postgres_dev_data`, gestionado por Compose. Frontend, backend y PostgreSQL publican puertos únicamente en `127.0.0.1`.
 
@@ -202,7 +200,7 @@ node scripts/postgres.mjs verificar --limpiar
 
 `--limpiar` autoriza retirar únicamente recursos nuevos de esa ejecución, después de comprobar nombres y etiquetas. Se rechazan proyectos/volúmenes preexistentes, secretos ajenos, puertos públicos y motores Docker remotos TCP/SSH. No se ejecutan limpiezas globales, `prune` ni borrados sobre una URL de base proporcionada externamente. Sin `--limpiar`, la verificación conserva sus recursos detenidos e informa sus nombres y el directorio temporal de claves. Si no puede acreditar propiedad o completar la limpieza, falla y deja los recursos para revisión.
 
-PostgreSQL es una dependencia del arranque normal y no requiere activar un perfil de Compose. Las migraciones se ejecutan por separado y nunca al iniciar Express. La validación en Supabase de desarrollo está completada; esto no habilita uso productivo ni publicación. Continuar usando solo datos ficticios en este entorno sin autenticación ni autorización de usuarios.
+PostgreSQL es una dependencia del arranque normal y está incluido en Compose. Las migraciones se ejecutan de forma explícita antes de iniciar Express. Usar exclusivamente datos ficticios en el entorno de desarrollo.
 
 ## Frontend y backend en el host, con PostgreSQL en Docker
 
@@ -243,6 +241,14 @@ http://localhost:3001
 
 Las comprobaciones HTTP del apartado anterior también aplican aquí. Para detener, usar `Ctrl+C` en las terminales propias de Vite y Express y `docker compose stop postgres` para ese PostgreSQL. Se conserva su volumen. El ensayo limpio del checklist utiliza un nombre de proyecto único y un puerto PostgreSQL asignado por Docker para evitar reutilizar el desarrollo habitual.
 
+## Cuentas y acceso a consultas
+
+`POST /auth/register` crea cuentas `cliente`. Se puede omitir `tipo` o enviar `cliente`; solicitar otro tipo recibe `400`. `POST /auth/login` devuelve un token Bearer y el perfil de la sesión, `GET /auth/me` devuelve ese perfil con un token vigente y `POST /auth/logout` revoca el token enviado. El perfil de sesión incluye `puedeLeerConsultas`, calculado por el backend.
+
+La lectura requiere una sesión vigente, el rol `representante` y un ID habilitado en `AUTH_REPRESENTANTES_IDS`. La variable se configura solo en el backend y queda vacía por defecto. Una lista inválida impide el arranque. Para configurar los IDs y preparar cuentas ficticias, seguir el [procedimiento de alta privada](backend/database/README.md#alta-privada-de-un-representante-ficticio).
+
+El acceso a toda la colección es una decisión deliberada para la **demostración académica con datos exclusivamente ficticios**. Un entorno productivo con datos reales requiere reglas de pertenencia y permisos por registro. La publicación de la demostración queda condicionada al endurecimiento de INC-05 y a las verificaciones previas documentadas en el [plan de despliegue](docs/PLAN-SEGURIDAD-DESPLIEGUE.md).
+
 ## API de formularios
 
 ### Estado del backend
@@ -259,7 +265,7 @@ Permite comprobar que el servidor está funcionando.
 GET /formulario
 ```
 
-Devuelve los formularios almacenados actualmente.
+Devuelve los formularios almacenados con `Authorization: Bearer <token>` de un representante habilitado. Una sesión ausente, inválida, vencida o revocada recibe `401`. Una sesión vigente sin permiso de lectura recibe `403`.
 
 ### Obtener formulario por ID
 
@@ -267,9 +273,9 @@ Devuelve los formularios almacenados actualmente.
 GET /formulario/:id
 ```
 
-Devuelve el formulario correspondiente al ID indicado.
+Aplica las mismas condiciones que el listado y devuelve el formulario correspondiente al ID indicado.
 
-Si no existe, el backend responde con estado `404`.
+Para una lectura autorizada, un ID inexistente recibe `404`.
 
 ### Crear formulario
 
@@ -277,7 +283,7 @@ Si no existe, el backend responde con estado `404`.
 POST /formulario
 ```
 
-El cuerpo esperado contiene:
+El envío es público. El cuerpo esperado contiene:
 
 ```json
 {
@@ -308,7 +314,7 @@ El cuerpo debe proporcionarse como JSON. Estructuras o JSON inválidos reciben u
 
 Ausente o en blanco conserva el valor predeterminado; una configuración explícita inválida produce un error y no se sustituye silenciosamente. CORS controla lectura del navegador, no autentica ni autoriza usuarios.
 
-Para Compose, `.env.example` documenta ambas variables; puede copiarse como `.env` con valores públicos. En ejecución local, Vite puede leer `frontend/.env` a partir de `frontend/.env.example`; el backend recibe variables del proceso, sin dotenv. Por ejemplo, en terminales PowerShell separadas:
+Para Compose, `.env.example` documenta estas variables y la lista de representantes del backend. Se puede copiar como `.env` y ajustar para el entorno local. En ejecución local, Vite puede leer `frontend/.env` a partir de `frontend/.env.example`; el backend carga el `.env` de la raíz y da prioridad a las variables del proceso. Por ejemplo, en terminales PowerShell separadas:
 
 ```powershell
 $env:CORS_ORIGINS = 'http://127.0.0.1:5173'
@@ -348,7 +354,7 @@ El selector opcional `--componente backend` o `--componente frontend` permite co
 
 Las etiquetas, el teclado y las regiones de estado tienen pruebas automatizadas. **La revisión manual de accesibilidad del prototipo refactorizado fue completada satisfactoriamente por el usuario con Chrome y Narrador de Windows, en Windows 10.** El usuario confirmó teclado, foco visible, identificación de los siete campos, validación, anuncios de pendiente/éxito/error y navegación por consultas, incluidos fallos de red, con datos ficticios en localhost y 127.0.0.1. Esta evidencia humana complementa las pruebas automatizadas; jsdom no la reemplaza.
 
-Las nuevas pantallas o funcionalidades y los cambios en los flujos afectados requerirán sus propias revisiones de accesibilidad; la revisión del prototipo no acredita resultados futuros ni conformidad completa con una norma. La aplicación conserva acceso sin autenticación: utilizar exclusivamente datos sintéticos, sin publicación con datos personales reales.
+Las nuevas pantallas y los flujos modificados requieren sus propias revisiones de accesibilidad. Para la demostración, utilizar exclusivamente datos sintéticos en el envío público y en el listado restringido.
 
 ## Flujo actual de formularios
 
@@ -367,7 +373,7 @@ POST /formulario
 Backend / Sequelize / PostgreSQL (local o Supabase de desarrollo)
         │
         ▼
-GET /formulario
+GET /formulario (sesión de representante habilitado)
         │
         ▼
 formularioService.js

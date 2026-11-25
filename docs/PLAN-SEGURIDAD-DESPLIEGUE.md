@@ -32,25 +32,27 @@ Se trabaja en rama de trabajo y con lockfiles existentes. El código y las prueb
 | I07 | Las aserciones añadidas por la PR cubren algunas propiedades de migración y permisos, sin probar el contrato de cuentas. | INC-02 e INC-03 |
 | M01 | DTO sin referencias y alta React seguida de un login que puede fallar cuando la cuenta ya fue creada. | DTO en INC-01, experiencia de alta en INC-05 |
 
-## Decisiones de seguridad pendientes
+## Decisiones de seguridad para la demostración
 
-### Política propuesta para INC-04
+### Política de autorización aprobada para INC-04
 
-Homero debe aprobar la política antes de cambiar contratos. La propuesta inicial aplica a una demostración con representantes habilitados y un conjunto ficticio de consultas.
+Homero aprobó esta política de D05/D06 el 25/11/2026 para una demostración sobre una base que contiene exclusivamente datos ficticios.
 
-| Operación | Sin sesión válida | Cliente autenticado | Representante autorizado |
+| Operación | Sin sesión válida | Sesión válida sin permiso de lectura | Representante autorizado |
 | --- | --- | --- | --- |
 | `GET /health` | Público | Público | Público |
-| `POST /formulario` | Público, con validación y protección contra abuso | Igual | Igual |
-| `GET /formulario` y `GET /formulario/:id` | 401 | 403 | Respuesta actual, incluido 404 para un ID inexistente |
-| `POST /auth/register` | Alta pública con tipo `cliente` asignado por servidor | Mismo contrato | Mismo contrato |
+| `POST /formulario` | Público, con validación y límite de tamaño existentes. Los controles contra abuso de INC-05 son requisito de publicación. | Igual | Igual |
+| `GET /formulario` y `GET /formulario/:id` | 401 | 403 | Listado de la colección de demostración o detalle. Se conservan JSON y 404 para un ID inexistente. |
+| `POST /auth/register` | Alta pública como `cliente`. Se acepta omitir `tipo` o enviar `cliente`. Otros valores reciben 400. | Mismo contrato | Mismo contrato |
 | `POST /auth/login` | Verificación de credenciales | Mismo contrato | Mismo contrato |
-| `GET /auth/me` | 401 | Perfil público propio | Perfil público propio |
+| `GET /auth/me` | 401 | Perfil propio con `puedeLeerConsultas: false` | Perfil propio con `puedeLeerConsultas: true` |
 | `POST /auth/logout` | Cierre idempotente | Revoca el token presentado | Revoca el token presentado |
 
-La comprobación de sesión y rol se realiza en Express antes de consultar los datos. React refleja el permiso y trata 401/403. Si se conserva temporalmente `tipo` en el cuerpo del alta, la propuesta es aceptar solo `cliente` y rechazar la solicitud de `representante`. Hay que aprobar expresamente si los representantes habilitados pueden leer todas las consultas de la demostración. Una partición futura por representante requerirá sus propias reglas. El correo declarado no acredita titularidad y queda excluido como criterio para asociar consultas históricas.
+La lectura requiere una sesión vigente, `tipo = 'representante'` y un ID de cuenta en `AUTH_REPRESENTANTES_IDS`, una lista del servidor específica de la base de demostración. Una lista ausente o vacía deniega la lectura y una configuración mal formada impide el arranque antes de abrir la base. La lista solo incorpora IDs del procedimiento controlado y se vuelve a preparar al cambiar o recrear la base. Las cuentas que se registraron como representantes con el alta anterior quedan sin acceso mientras su ID no esté habilitado. La lectura de toda la colección es una decisión deliberada para la demostración académica. Un entorno productivo con datos reales requiere reglas de pertenencia y permisos por registro. El correo declarado queda excluido como criterio de permiso o de asociación histórica.
 
-Para preparar representantes ficticios se propone un comando privado operado fuera de la aplicación web, con la misma validación y hashing de cuentas y los permisos de base mínimos. Recibirá la contraseña por un canal privado, sin incluirla en argumentos ni logs. Solo creará cuentas nuevas y tratará duplicados sin promover roles. Las filas de tipo `representante` que puedan haberse creado por registro público deberán revisarse antes de confiar en esa etiqueta. Sintaxis y procedimiento quedan para INC-04. No se prevé un endpoint administrativo público.
+El [alta privada de representantes ficticios](../backend/database/README.md#alta-privada-de-un-representante-ficticio) usa `cuenta:crear-representante` fuera de la aplicación web y solo acepta PostgreSQL local por loopback. Crea una cuenta con el rol de aplicación y devuelve su ID. La habilitación se configura por separado y los duplicados conservan la cuenta original.
+
+Express comprueba el permiso antes de buscar o listar datos y aplica `Cache-Control: no-store` a las respuestas de ambas lecturas. El login y el perfil de sesión incluyen `puedeLeerConsultas`. React muestra el menú y la vista con ese permiso, envía el token para las lecturas y descarta datos ante 401, 403 o fin de sesión.
 
 ### Sesiones, abuso y transporte para INC-05
 
@@ -159,14 +161,14 @@ Si falla la publicación, mantener restringido el acceso al backend y revisar lo
 | --- | --- | --- | --- |
 | INC-01 | Confirmado en Git | B01 e I05 resueltos. DTO sin uso retirados. 288 backend y 66 frontend aprobados, más typecheck, ESLint, build y comprobación HTTP dirigida. | `43f08070fdaf8fa34a8f19684a2772a21aa0d303` |
 | INC-02 | Confirmado en Git | 22 casos HTTP y 7 de React nuevos. Suites completas 310/310 backend y 73/73 frontend. Typecheck, lint y build aprobados. | `e4c1a5c5387bae41946f220d2ec67b871ea7cfe4` |
-| INC-03 | Implementado y verificado localmente | Actualización 001 → 002 con datos previos, esquema y permisos comprobados. 21 casos PostgreSQL, 310 backend y 33 de protecciones aprobados. Recuperación documentada. | Pendiente |
-| INC-04 | Pendiente de aprobación de política | Pendiente | Pendiente |
+| INC-03 | Confirmado en Git | Actualización 001 → 002 con datos previos, esquema y permisos comprobados. 21 casos PostgreSQL, 310 backend y 33 de protecciones aprobados. Recuperación documentada. | `1f57de518bd3d3e21f90f510123558d2aec1bd12` |
+| INC-04 | Implementado y verificado localmente | Alta pública de clientes y lecturas limitadas a representantes habilitados. 325 pruebas backend, 83 frontend y 22 casos PostgreSQL aprobados. Typecheck, lint y build correctos. | Pendiente |
 | INC-05 | Pendiente | Pendiente | Pendiente |
 | INC-06 | Pendiente | Pendiente | Pendiente |
 | INC-07 | Pendiente | Pendiente | Pendiente |
 | INC-08 | Pendiente | Pendiente | Pendiente |
 
-Quedan abiertos el arranque con bases en `001`, el acceso de lectura sin autorización, la procedencia de cuentas representante, la interrupción entre DDL e historial, las sesiones en memoria y los ajustes pendientes para los servicios públicos. Cerrar cada riesgo con evidencia del incremento respectivo. Registrar fallos y recuperaciones junto a la revisión que se verificó.
+La actualización de una base con `001` y el control de lectura de INC-04 se verificaron localmente. Para publicar quedan pendientes la revisión del estado remoto y de los representantes de ese entorno, los controles de abuso, el ciclo de sesiones y las comprobaciones de los servicios públicos. La interrupción entre DDL e historial tiene un procedimiento de diagnóstico; se debe revisar el estado antes de reintentar una migración interrumpida.
 
 ### INC-01 · Evidencia del 24/11/2026
 
@@ -226,4 +228,21 @@ Con PostgreSQL **17.12** se verificaron las cinco columnas `NOT NULL` de usuario
 
 Docker Desktop estaba detenido al comienzo. Homero lo inició y se verificó el motor Linux local antes de ejecutar. Se usaron las dependencias de la copia de auditoría con Node **22.23.4** y pnpm **12.3.4**. En la [guía de persistencia](../backend/database/README.md#actualización-local-de-001-a-002) quedaron la secuencia local y los pasos para diagnosticar un DDL confirmado sin registro posterior. Los archivos `001` y `002`, el runner, Compose y los permisos de limpieza están intactos. La evidencia es local. La condición de endurecer las comprobaciones de restricciones en el arranque corresponde a INC-05.
 
-El commit manual de INC-03 está pendiente. INC-04 requiere presentar y aprobar la política de autorización y el alta privada de representantes antes de implementar.
+INC-03 quedó confirmado en `1f57de518bd3d3e21f90f510123558d2aec1bd12`.
+
+### INC-04 · Evidencia del 25/11/2026
+
+Partida `1f57de5` en `feature/cuentas-usuarios`. Con la política aprobada por Homero, el backend protege el listado y detalle antes de acceder al almacén. Las pruebas HTTP cubrieron anónimos con y sin origen permitido, sesiones inválidas, vencidas y revocadas, clientes, representantes anteriores sin habilitar y representantes habilitados. Comprobaron que ni el ID de un cliente incluido en la lista ni el correo declarado en una consulta otorgan permiso. La configuración inválida bloqueó el arranque y las respuestas denegadas omitieron los datos y la existencia de los IDs.
+
+El runner PostgreSQL verificó la transición desde `001`, la instalación desde una base vacía y la persistencia al recrear Express. Probó el alta privada con `docker_laws_app`, la salida limitada al ID, el rechazo de duplicados y el acceso con y sin habilitación explícita. React se verificó con red controlada, incluidos el acceso directo, el envío público, el menú, las respuestas 401/403 y la retirada de consultas al cerrar sesión.
+
+| Verificación ejecutada | Resultado |
+| --- | --- |
+| `pnpm --dir backend with current test` y `pnpm --dir backend with current typecheck` | **325/325** y TypeScript correcto. |
+| `pnpm --dir frontend with current test`, `lint` y `build` | **83/83**, ESLint y build Vite correctos. |
+| `pnpm --dir backend with current test:postgres --limpiar` | **22 casos** aprobados en dos instancias locales descartables. TAP incluye un caso contenedor por suite en sus totales 11 y 13. Inventario Docker idéntico antes y después. |
+| Configuración Compose de desarrollo y pruebas | Correcta. Se comprobó el valor vacío y una lista explícita en el servicio de backend. |
+| `node --test scripts/postgres.test.mjs` y `node --test scripts/verificar-docker.test.mjs` | **33/33** protecciones PostgreSQL y **32/32** autopruebas del verificador Docker con fixtures sintéticos. |
+| Revisión de alcance y `git diff --check` | Correcta. `.env`, `secrets/` y los archivos privados de SDD siguen excluidos. |
+
+Las suites se ejecutaron en una copia temporal con Node **22.23.4** y pnpm **12.3.4**, usando las versiones de los lockfiles de la rama. La verificación se limitó a recursos locales y datos ficticios. El commit manual de INC-04 está pendiente. El endurecimiento de cuentas y sesiones se evaluará en INC-05 antes de publicar.

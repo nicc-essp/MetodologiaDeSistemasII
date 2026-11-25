@@ -14,3 +14,16 @@ export function parsearOrigenes(valor?: string): string[] {
     throw new Error('CORS_ORIGINS debe contener orígenes HTTP(S) válidos separados por comas.');
   }
 }
+
+export function parsearIdsRepresentantes(valor?: string): ReadonlySet<number> {
+  if (!valor?.trim()) return new Set();
+  const ids = valor.split(',').map(entrada => {
+    const texto = entrada.trim();
+    const id = Number(texto);
+    if (!/^[1-9][0-9]*$/.test(texto) || id > 2147483647) {
+      throw new Error('AUTH_REPRESENTANTES_IDS debe contener IDs enteros positivos de PostgreSQL separados por comas.');
+    }
+    return id;
+  });
+  return new Set(ids);
+}

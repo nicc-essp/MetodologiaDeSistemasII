@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  borrarToken,
   cerrarSesion,
   iniciarSesion,
+  leerToken,
   obtenerUsuarioActual,
   registrarCuenta,
 } from '../services/authService';
@@ -28,9 +30,20 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  const rechazarLectura = useCallback((categoria, token) => {
+    if (leerToken() !== token) return;
+    if (categoria === 'sesion') {
+      borrarToken();
+      setUsuario(null);
+    } else if (categoria === 'permiso') {
+      setUsuario(actual => actual && { ...actual, puedeLeerConsultas: false });
+    }
+  }, []);
+
   const valor = useMemo(() => ({
     usuario,
     cargando,
+    rechazarLectura,
     async entrar(datos) {
       const sesion = await iniciarSesion(datos);
       setUsuario(sesion.usuario);
@@ -49,7 +62,7 @@ export function AuthProvider({ children }) {
         setUsuario(null);
       }
     },
-  }), [usuario, cargando]);
+  }), [usuario, cargando, rechazarLectura]);
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
 }

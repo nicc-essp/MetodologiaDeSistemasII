@@ -11,14 +11,16 @@ import { crearMigrador, describirErrorPostgres, migracionInicial, migracionUsuar
 import { iniciarServidor } from '../index';
 import { definirConsulta } from '../models/consulta.model';
 import { consultaFicticia } from './helpers/fixtures';
-import { comprobarDestinoDescartable, ejecutarCli } from './helpers/postgres';
+import { comprobarDestinoDescartable, ejecutarAltaRepresentante, ejecutarCli } from './helpers/postgres';
+import { autenticarRepresentante, datosRepresentanteFicticio } from './helpers/auth';
 
 test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos reales', { timeout: 90000 }, async t => {
   comprobarDestinoDescartable();
   const migrador = crearConexionPostgres(leerConfiguracionPostgres('migrador'));
   const aplicacion = crearConexionPostgres(leerConfiguracionPostgres('aplicacion'));
   const historial = () => migrador.query('SELECT name FROM app."SequelizeMeta" ORDER BY name', { type: QueryTypes.SELECT });
-  const opcionesServidor = { puerto: 0, host: '127.0.0.1' };
+  const env = { ...process.env, AUTH_REPRESENTANTES_IDS: '' };
+  const opcionesServidor = { puerto: 0, host: '127.0.0.1', env };
   try {
     // Fuera de los subtests: una base que ya tenga tablas detiene todo antes del DDL.
     await migrador.authenticate();
@@ -147,14 +149,22 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
     });
 
     await t.test('Express arranca con el rol de aplicación, recupera la consulta previa y persiste cuentas', async () => {
-      const servicio = await iniciarServidor(opcionesServidor);
+      const preparacion = ejecutarAltaRepresentante(datosRepresentanteFicticio);
+      assert.ifError(preparacion.error);
+      assert.equal(preparacion.status, 0, preparacion.stderr);
+      assert.match(preparacion.stdout.trim(), /^[1-9][0-9]*$/);
+      const idRepresentante = Number(preparacion.stdout.trim());
+      const servicio = await iniciarServidor({
+        ...opcionesServidor, env: { ...env, AUTH_REPRESENTANTES_IDS: String(idRepresentante) },
+      });
       try {
         const { port } = servicio.servidor.address() as AddressInfo;
         const base = `http://127.0.0.1:${port}`;
-        const listado = await fetch(`${base}/formulario`);
+        const headers = await autenticarRepresentante(base);
+        const listado = await fetch(`${base}/formulario`, { headers });
         assert.equal(listado.status, 200);
         assert.deepEqual(await listado.json(), [consultaAnterior]);
-        const detalle = await fetch(`${base}/formulario/${consultaAnterior.id}`);
+        const detalle = await fetch(`${base}/formulario/${consultaAnterior.id}`, { headers });
         assert.equal(detalle.status, 200);
         assert.deepEqual(await detalle.json(), consultaAnterior);
 
@@ -172,13 +182,16 @@ test('PostgreSQL descartable: migración, esquema, historial, modelo y permisos 
         const duplicado = await enviar('/register', { ...datos, ...credenciales });
         assert.equal(duplicado.status, 409);
         assert.deepEqual(await duplicado.json(), { message: 'El correo electrónico ya está registrado' });
-        const persistidos = await aplicacion.query('SELECT id, nombre, email, tipo FROM app.usuarios', { type: QueryTypes.SELECT });
-        assert.deepEqual(persistidos, [usuario]);
+        const persistidos = await aplicacion.query('SELECT id, nombre, email, tipo FROM app.usuarios ORDER BY id', { type: QueryTypes.SELECT });
+        assert.deepEqual(persistidos, [{
+          id: idRepresentante, nombre: datosRepresentanteFicticio.nombre,
+          email: datosRepresentanteFicticio.email, tipo: 'representante',
+        }, usuario]);
         const login = await enviar('/login', credenciales);
         assert.equal(login.status, 200);
         const sesion: unknown = await login.json();
         assert.ok(sesion && typeof sesion === 'object' && 'usuario' in sesion);
-        assert.deepEqual(sesion.usuario, usuario);
+        assert.deepEqual(sesion.usuario, { ...usuario, puedeLeerConsultas: false });
       } finally {
         await servicio.cerrar();
       }

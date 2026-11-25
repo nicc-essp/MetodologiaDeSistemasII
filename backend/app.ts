@@ -16,12 +16,15 @@ export function createApp({
   almacen = crearAlmacenFormularios(),
   cuentas = crearAlmacenCuentas(),
   allowedOrigins = parsearOrigenes(),
+  representantesHabilitados = new Set<number>(),
 }: {
   almacen?: AlmacenFormularios;
   cuentas?: AlmacenCuentas;
   allowedOrigins?: string[];
+  representantesHabilitados?: ReadonlySet<number>;
 } = {}) {
   const app = express();
+  const servicioAuth = crearServicioAuth(cuentas, representantesHabilitados);
   app.use(cors({ origin: allowedOrigins }));
   app.use(express.json({ limit: '100kb', strict: true, verify: (_req, _res, cuerpo, encoding) => {
     if (encoding === 'utf-8' && !isUtf8(cuerpo)) {
@@ -29,8 +32,8 @@ export function createApp({
     }
   } }));
   app.use('/health', healthRouter);
-  app.use('/formulario', crearRouterFormularios(almacen));
-  app.use('/auth', crearRouterAuth(crearServicioAuth(cuentas)));
+  app.use('/formulario', crearRouterFormularios(almacen, servicioAuth));
+  app.use('/auth', crearRouterAuth(servicioAuth));
   app.use(manejarErrores);
   return app;
 }

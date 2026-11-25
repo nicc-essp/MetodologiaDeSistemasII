@@ -10,7 +10,6 @@ export function Register() {
     nombre: '',
     email: '',
     password: '',
-    tipo: 'cliente',
   });
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
@@ -78,13 +77,6 @@ export function Register() {
               minLength={8}
               autoComplete="new-password"
             />
-          </div>
-          <div className="form-group">
-            <label htmlFor="register-tipo">Tipo de cuenta:</label>
-            <select id="register-tipo" name="tipo" value={formData.tipo} onChange={handleChange}>
-              <option value="cliente">Cliente</option>
-              <option value="representante">Representante</option>
-            </select>
           </div>
           <button type="submit" className="btn-submit" disabled={enviando}>
             {enviando ? 'Registrando...' : 'Registrarse'}

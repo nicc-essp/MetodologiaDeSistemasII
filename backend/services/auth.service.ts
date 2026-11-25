@@ -1,27 +1,39 @@
 import { randomBytes } from 'node:crypto';
 import { compare, hash } from 'bcryptjs';
 import { ErrorCuenta, type AlmacenCuentas } from '../data/cuentas-guardadas';
-import type { UsuarioPublico } from '../models/usuario.model';
+import { publico, type TipoUsuario, type UsuarioPublico } from '../models/usuario.model';
+import type { DatosRegistro } from '../validations/auth.validation';
 
 const horasSesion = 8;
 
-export interface SesionIniciada {
-  token: string;
-  usuario: UsuarioPublico;
+interface UsuarioSesion extends UsuarioPublico {
+  puedeLeerConsultas: boolean;
 }
 
-export function crearServicioAuth(cuentas: AlmacenCuentas) {
+export interface SesionIniciada {
+  token: string;
+  usuario: UsuarioSesion;
+}
+
+export async function crearCuenta(cuentas: AlmacenCuentas, datos: DatosRegistro, tipo: TipoUsuario): Promise<UsuarioPublico> {
+  const password_hash = await hash(datos.password, 10);
+  return cuentas.crear({ nombre: datos.nombre, email: datos.email, tipo, password_hash });
+}
+
+export function crearServicioAuth(cuentas: AlmacenCuentas, representantesHabilitados: ReadonlySet<number>) {
   const sesiones = new Map<string, { usuarioId: number; expira: number }>();
+  const idsHabilitados = new Set(representantesHabilitados);
+
+  function perfilDeSesion(usuario: UsuarioPublico): UsuarioSesion {
+    return {
+      ...usuario,
+      puedeLeerConsultas: usuario.tipo === 'representante' && idsHabilitados.has(usuario.id),
+    };
+  }
 
   return {
-    async registrar(datos: { nombre: string; email: string; password: string; tipo: UsuarioPublico['tipo'] }): Promise<UsuarioPublico> {
-      const password_hash = await hash(datos.password, 10);
-      return cuentas.crear({
-        nombre: datos.nombre,
-        email: datos.email,
-        tipo: datos.tipo,
-        password_hash,
-      });
+    registrar(datos: DatosRegistro): Promise<UsuarioPublico> {
+      return crearCuenta(cuentas, datos, 'cliente');
     },
 
     async iniciarSesion(datos: { email: string; password: string }): Promise<SesionIniciada> {
@@ -32,10 +44,10 @@ export function crearServicioAuth(cuentas: AlmacenCuentas) {
       }
       const token = randomBytes(32).toString('hex');
       sesiones.set(token, { usuarioId: guardado.id, expira: Date.now() + horasSesion * 60 * 60 * 1000 });
-      return { token, usuario: { id: guardado.id, nombre: guardado.nombre, email: guardado.email, tipo: guardado.tipo } };
+      return { token, usuario: perfilDeSesion(publico(guardado)) };
     },
 
-    async usuarioDeToken(token: string | undefined): Promise<UsuarioPublico> {
+    async usuarioDeToken(token: string | undefined): Promise<UsuarioSesion> {
       if (!token) throw new ErrorCuenta(401, 'No hay una sesión activa');
       const sesion = sesiones.get(token);
       if (!sesion || sesion.expira <= Date.now()) {
@@ -47,7 +59,7 @@ export function crearServicioAuth(cuentas: AlmacenCuentas) {
         sesiones.delete(token);
         throw new ErrorCuenta(401, 'No hay una sesión activa');
       }
-      return usuario;
+      return perfilDeSesion(usuario);
     },
 
     async cerrarSesion(token: string | undefined): Promise<void> {
