@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { obtenerBaseApi } from './apiConfig';
+import configurarVite from '../../vite.config.js';
 
 beforeEach(() => vi.stubEnv('VITE_API_BASE_URL', ''));
 
@@ -26,4 +27,30 @@ it('lee la configuración al operar, sin estado importado permanente', () => {
   expect(obtenerBaseApi()).toBe('http://127.0.0.1:3001/api');
   vi.stubEnv('VITE_API_BASE_URL', 'valor inválido');
   expect(() => obtenerBaseApi()).toThrow();
+});
+
+it.each(['https://api.ejemplo.invalid', ' https://api.ejemplo.invalid/ '])(
+  'el build de Vercel acepta un origen HTTPS explícito (%j)',
+  valor => {
+    vi.stubEnv('VITE_API_BASE_URL', valor);
+    expect(() => configurarVite({ command: 'build', mode: 'vercel' })).not.toThrow();
+  },
+);
+
+it.each(['', ' ', 'http://api.ejemplo.invalid', 'https://localhost', 'https://api.localhost.',
+  'https://api.local', 'https://127.1', 'https://[::1]', 'https://192.0.2.1',
+  'https:api.ejemplo.invalid', 'https://api.ejemplo.invalid/api', 'https://api.ejemplo.invalid?',
+  'https://api.ejemplo.invalid#', 'https://usuario:marcador-ficticio@api.ejemplo.invalid'])(
+  'el build de Vercel rechaza una base no apta (%j) con un error sin su valor',
+  valor => {
+    vi.stubEnv('VITE_API_BASE_URL', valor);
+    expect(() => configurarVite({ command: 'build', mode: 'vercel' })).toThrow(
+      'VITE_API_BASE_URL debe ser el origen HTTPS de la API en Vercel, con nombre DNS y sin credenciales, rutas, consulta ni fragmento.',
+    );
+  },
+);
+
+it('el build local sigue admitiendo el destino predeterminado', () => {
+  expect(() => configurarVite({ command: 'build', mode: 'production' })).not.toThrow();
+  expect(obtenerBaseApi()).toBe('http://localhost:3001');
 });

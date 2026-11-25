@@ -127,8 +127,18 @@ En la verificación posterior, confirmar `GET /health` con 200 y después el flu
 
 ### Vercel
 
-- Raíz `frontend/`, instalación `pnpm install --frozen-lockfile`, build `pnpm build`, salida `dist`. Definir `VITE_API_BASE_URL` con la URL HTTPS confirmada de Render antes de construir. Las variables `VITE_*` son públicas.
-- Comprobar fallback SPA a `index.html` para enlaces directos y recargas de `/login`, `/register`, `/consulta-juridica` y `/consultas`. Verificar preflight con Bearer, estados de sesión, salida y errores desde navegador. Ver [Vite y rutas SPA en Vercel](https://vercel.com/docs/frameworks/frontend/vite#using-vite-to-make-spas).
+Configuración preparada para aplicar en la etapa de despliegue autorizada. Elegir `frontend` como **Root Directory**, Vite como framework y Node.js `22.x`. Configurar `ENABLE_EXPERIMENTAL_COREPACK=1` para usar la versión de pnpm fijada en `package.json`, actualmente `12.3.4`. Conservar los comandos y el directorio de salida declarados en `frontend/vercel.json`. [Configuración de build de Vercel](https://vercel.com/docs/builds/configure-a-build) · [Versiones de Node](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions)
+
+| Ajuste versionado | Valor |
+| --- | --- |
+| Instalación | `corepack pnpm install --frozen-lockfile` |
+| Build | `corepack pnpm run build --mode vercel` |
+| Salida | `dist` |
+| Rutas SPA | `/login`, `/register`, `/consulta-juridica` y `/consultas` cargan `/index.html` conservando la URL para React Router. |
+
+En los entornos Vercel autorizados definir `VITE_API_BASE_URL` con el origen HTTPS confirmado de Render, solo esquema, nombre DNS y puerto si corresponde. El modo `vercel` detiene el build si falta un origen válido. Vite incorpora ese valor al bundle y requiere reconstruir si cambia. Las variables `VITE_*` son públicas. Las credenciales y los certificados de PostgreSQL se gestionan en el backend. [Variables y modos de Vite](https://vite.dev/guide/env-and-mode) · [Rewrites en Vercel](https://vercel.com/docs/routing/rewrites)
+
+Antes de habilitar el sitio, incorporar en `CORS_ORIGINS` de Render el origen HTTPS exacto del frontend publicado y solo las vistas previas aprobadas. Verificar preflight con `Authorization`, entrada directa y recarga de las cuatro rutas, estado anónimo, recuperación de sesión, errores de API y cierre con datos ficticios. Esta configuración deja la API en Render y el sitio estático en Vercel. La verificación de ambos servicios y la publicación se realizan con autorización posterior. [Vite y rutas SPA en Vercel](https://vercel.com/docs/frameworks/frontend/vite#using-vite-to-make-spas)
 
 ## Actualización de Supabase y recuperación
 
@@ -189,8 +199,8 @@ Si falla la publicación, mantener restringido el acceso al backend y revisar lo
 | INC-03 | Confirmado en Git | Actualización 001 → 002 con datos previos, esquema y permisos comprobados. 21 casos PostgreSQL, 310 backend y 33 de protecciones aprobados. Recuperación documentada. | `1f57de518bd3d3e21f90f510123558d2aec1bd12` |
 | INC-04 | Confirmado en Git | Alta pública de clientes y lecturas limitadas a representantes habilitados. 325 pruebas backend, 83 frontend y 22 casos PostgreSQL aprobados. Typecheck, lint y build correctos. | `7c1e5cd0bdc131ef88c45b1ce3524c6e101df1dc` |
 | INC-05 | Confirmado en Git | Límites de credenciales, solicitudes y sesiones comprobados. 341 pruebas backend, 91 frontend y 24 casos PostgreSQL aprobados. | `f1ca19793009983a2188e9784053e64d404c362e` |
-| INC-06 | Preparado y verificado localmente | Arranque, puerto, health y cierre comprobados. 350 pruebas backend, 91 frontend y 25 casos PostgreSQL aprobados. El proxy de la plataforma queda pendiente de verificación. | Pendiente |
-| INC-07 | Pendiente | Pendiente | Pendiente |
+| INC-06 | Confirmado en Git | Arranque, puerto, health y cierre comprobados. 350 pruebas backend, 91 frontend y 25 casos PostgreSQL aprobados. El proxy de la plataforma queda pendiente de verificación. | `5d6153f1f095bd1c0b79c3c0995ff1115c929652` |
+| INC-07 | Preparado y verificado localmente | Build a `dist` con origen HTTPS obligatorio. Acceso directo y recarga de cuatro rutas en Chrome. 108 pruebas frontend y 350 backend aprobadas. | Pendiente |
 | INC-08 | Pendiente | Pendiente | Pendiente |
 
 La actualización desde `001`, los permisos de lectura y el endurecimiento de cuentas se verificaron localmente. Antes de publicar quedan la revisión de la base remota y de sus representantes, la terminación HTTPS y la dirección de cliente vistas por Express detrás del proxy, y las comprobaciones del flujo publicado. La interrupción entre DDL e historial tiene un procedimiento de diagnóstico. Revisar el estado antes de reintentar una migración interrumpida.
@@ -302,4 +312,19 @@ Las pruebas locales de Express comprobaron TLS directo, HTTPS reenviado desde un
 | Configuración Compose de desarrollo y pruebas, y `node --test scripts/postgres.test.mjs` | Compose correcto y **33/33** protecciones aprobadas. |
 | `git diff --check` y alcance | Correctos. Los archivos privados conservan sus exclusiones. |
 
-El primer intento offline detectó que faltaba el tarball de `bcryptjs@3.0.3`. Se recuperó la versión fijada desde el registro público de npm y se repitió la instalación offline en otra copia sin `node_modules`. La preparación queda lista para commit manual. Las verificaciones del servicio en Render y de la base Supabase requieren autorización específica.
+El primer intento offline detectó que faltaba el tarball de `bcryptjs@3.0.3`. Se recuperó la versión fijada desde el registro público de npm y se repitió la instalación offline en otra copia sin `node_modules`. INC-06 quedó confirmado en `5d6153f1f095bd1c0b79c3c0995ff1115c929652`. Las verificaciones del servicio en Render y de la base Supabase requieren autorización específica.
+
+### INC-07 · Evidencia del 25/11/2026
+
+Partida `5d6153f` en `feature/cuentas-usuarios`. Se agregó la configuración versionada de Vercel en `frontend/vercel.json`. El modo de build `vercel` valida `VITE_API_BASE_URL` antes de generar archivos. Cuatro ejecuciones CLI rechazaron una variable ausente, HTTP, localhost y una URL con credenciales, con mensajes que omitían el valor original. La compilación válida usó el origen ficticio `https://api.ejemplo.invalid`. Se verificó que el bundle incluyera ese origen y excluyera el valor sintético de una variable privada de PostgreSQL.
+
+| Verificación ejecutada | Resultado |
+| --- | --- |
+| Desde `frontend`, `corepack pnpm install --frozen-lockfile` con caché offline | Instalación limpia con Node **22.23.4** y pnpm **12.3.4**, lockfile idéntico. |
+| Desde `frontend`, `corepack pnpm run test` y `corepack pnpm run lint` | **108/108** y ESLint correcto. Se cubrieron validación del destino, formularios, errores, restauración, vencimiento y cierre de sesión. |
+| Desde `frontend`, `corepack pnpm run build` y `corepack pnpm run build --mode vercel` | Ambos generaron `dist/index.html` y sus assets. Los cuatro builds negativos fallaron como se esperaba. |
+| Chrome headless 158 con un servidor HTTP temporal en loopback que aplica las reglas declaradas | Acceso directo y recarga real correctos en `/login`, `/register`, `/consulta-juridica` y `/consultas`. Se conservaron las URLs, los nombres asociados a los campos y el avance por Tab en los formularios. La vista protegida conservó el estado anónimo. El servidor de prueba devolvió 404 para una ruta y un asset inexistentes. |
+| Desde `backend`, `corepack pnpm run test` y `corepack pnpm run typecheck` | **350/350** y TypeScript correcto. |
+| `git diff --check` y alcance | Correctos, con las exclusiones privadas verificadas. |
+
+Las pruebas se ejecutaron en una copia temporal, con datos ficticios. La comprobación en Chrome acredita las vistas compiladas con un servidor local y no reproduce la infraestructura de Vercel. Las reescrituras en la plataforma, el origen CORS definitivo y el flujo con la API desplegada conservan su verificación pendiente. INC-07 queda listo para commit manual.

@@ -20,3 +20,17 @@ pnpm --dir frontend build
 ```
 
 Las pruebas usan Vitest, jsdom y Testing Library con red controlada; no sustituyen un recorrido real entre navegador, API y base. Detener Vite con `Ctrl+C`. Las dos modalidades de ejecución, la preparación de PostgreSQL mediante Docker, la configuración y la rama oficial de entrega `main` se explican en el [README principal](../README.md). La [auditoría práctica](../docs/CHECKLIST.md) conserva los resultados históricos y la reproducción limpia pendiente.
+
+## Build preparado para Vercel
+
+El proyecto de Vercel usa `frontend` como directorio raíz. `vercel.json` define la instalación con lockfile, el build en modo `vercel`, la salida `dist` y las reescrituras para abrir o recargar las rutas de React. Para reproducir este build, configurar Node.js `22.x`, Corepack y el origen HTTPS público de la API en `VITE_API_BASE_URL`. Toda variable `VITE_*` puede verse en el navegador. [Configuración completa para Vercel](../docs/PLAN-SEGURIDAD-DESPLIEGUE.md#vercel)
+
+Para comprobar el build desde PowerShell en una terminal de prueba, se puede utilizar un dominio ficticio reservado y visitar las vistas sin enviar formularios.
+
+```powershell
+$env:VITE_API_BASE_URL = 'https://api.ejemplo.invalid'
+pnpm --dir frontend run build --mode vercel
+pnpm --dir frontend run preview --host 127.0.0.1 --port 4173 --strictPort
+```
+
+Abrir directamente `/login`, `/register`, `/consulta-juridica` y `/consultas` en el servidor de preview. Vite sirve el build para comprobar las vistas localmente. La aplicación real de las reescrituras y CORS se verifica durante el despliegue autorizado.
