@@ -1,3 +1,32 @@
+import { isIP } from 'node:net';
+
+export function parsearPuerto(valor?: string): number {
+  if (valor === undefined) return 3001;
+  const puerto = Number(valor);
+  if (!/^[1-9][0-9]{0,4}$/.test(valor) || puerto > 65535) {
+    throw new Error('PORT debe ser un entero decimal entre 1 y 65535.');
+  }
+  return puerto;
+}
+
+export function parsearProxiesConfiables(valor?: string): string[] {
+  if (!valor?.trim()) return [];
+  const proxies = valor.split(',').map(entrada => {
+    const proxy = entrada.trim();
+    const [direccion, prefijo, resto] = proxy.split('/');
+    const familia = isIP(direccion);
+    const ipv4Mapeada = familia === 6 && !direccion.includes('%')
+      && new URL(`http://[${direccion}]`).hostname.startsWith('[::ffff:');
+    if (!familia || direccion.includes('%') || ipv4Mapeada || resto !== undefined
+      || (prefijo !== undefined && (!/^[1-9][0-9]{0,2}$/.test(prefijo)
+        || Number(prefijo) > (familia === 4 ? 32 : 128)))) {
+      throw new Error('TRUST_PROXY_CIDRS debe contener direcciones IPv4, IPv6 o CIDR explícitas separadas por comas.');
+    }
+    return proxy;
+  });
+  return [...new Set(proxies)];
+}
+
 export function parsearOrigenes(valor?: string): string[] {
   if (!valor?.trim()) return ['http://localhost:5173'];
   try {

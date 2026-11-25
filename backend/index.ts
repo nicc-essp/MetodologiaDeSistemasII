@@ -4,20 +4,32 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Sequelize } from 'sequelize';
 import { createApp } from './app';
-import { parsearIdsRepresentantes, parsearOrigenes } from './config/app.config';
+import { parsearIdsRepresentantes, parsearOrigenes, parsearProxiesConfiables, parsearPuerto } from './config/app.config';
 import { leerConfiguracionPostgres } from './config/database.config';
 import { crearConexionPostgres } from './database/connection';
 import { prepararAlmacenPostgres } from './data/formularios-postgres';
 import { prepararAlmacenCuentasPostgres } from './data/cuentas-postgres';
 
-export async function iniciarServidor({ env = process.env, puerto = 3001, host = '0.0.0.0' }: {
+export async function iniciarServidor({ env = process.env, puerto, host = '0.0.0.0' }: {
   env?: NodeJS.ProcessEnv; puerto?: number; host?: string;
 } = {}) {
   let conexion: Sequelize | undefined;
-  let etapa = 'validar la configuración CORS, PostgreSQL y AUTH_REPRESENTANTES_IDS';
+  let etapa = 'validar PORT';
   try {
+    const puertoHttp = puerto ?? parsearPuerto(env.PORT);
+    etapa = 'validar la configuración CORS y AUTH_REPRESENTANTES_IDS';
     const representantesHabilitados = parsearIdsRepresentantes(env.AUTH_REPRESENTANTES_IDS);
     const allowedOrigins = parsearOrigenes(env.CORS_ORIGINS);
+    const enRender = env.RENDER === 'true';
+    if (enRender) {
+      etapa = 'validar POSTGRES_TARGET=supabase-dev para Render';
+      if (env.POSTGRES_TARGET !== 'supabase-dev') throw new Error();
+      etapa = 'validar orígenes HTTPS explícitos en CORS_ORIGINS para Render';
+      if (!env.CORS_ORIGINS?.trim() || allowedOrigins.some(origen => !origen.startsWith('https://'))) throw new Error();
+    }
+    etapa = 'validar TRUST_PROXY_CIDRS';
+    const proxiesConfiables = parsearProxiesConfiables(env.TRUST_PROXY_CIDRS);
+    etapa = 'validar la configuración PostgreSQL';
     const config = leerConfiguracionPostgres('aplicacion', env);
     conexion = crearConexionPostgres(config);
     etapa = 'conectar a PostgreSQL con el rol de aplicación';
@@ -27,13 +39,13 @@ export async function iniciarServidor({ env = process.env, puerto = 3001, host =
     etapa = 'comprobar el esquema y los permisos de cuentas (ejecutá db:migrate explícitamente)';
     const cuentas = await prepararAlmacenCuentasPostgres(conexion);
     const servidor = createServer(createApp({
-      almacen, cuentas, allowedOrigins, representantesHabilitados,
-      exigirHttpsCuentas: env.NODE_ENV === 'production',
+      almacen, cuentas, allowedOrigins, representantesHabilitados, proxiesConfiables,
+      exigirHttpsCuentas: enRender || env.NODE_ENV === 'production',
     }));
     etapa = 'abrir el puerto HTTP';
     await new Promise<void>((resolve, reject) => {
       servidor.once('error', reject);
-      servidor.listen(puerto, host, () => { servidor.off('error', reject); resolve(); });
+      servidor.listen(puertoHttp, host, () => { servidor.off('error', reject); resolve(); });
     });
     const base = conexion;
     let cierre: Promise<void> | undefined;
@@ -65,9 +77,14 @@ async function cerrarServidor(servidor: Server, conexion: Sequelize): Promise<vo
 async function main() {
   try {
     const servicio = await iniciarServidor();
-    console.log('Server is running on port 3001');
+    const direccion = servicio.servidor.address();
+    if (direccion && typeof direccion !== 'string') {
+      console.log(`Backend escuchando en ${direccion.address}:${direccion.port}.`);
+    }
     const detener = () => {
-      void servicio.cerrar().catch(() => {
+      void servicio.cerrar().then(() => {
+        console.log('Backend detenido.');
+      }).catch(() => {
         console.error('No se pudo completar el cierre ordenado del backend.');
         process.exitCode = 1;
       }).finally(() => {

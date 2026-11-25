@@ -174,6 +174,8 @@ Sequelize recibe `dialectOptions.ssl` con la CA leída, `rejectUnauthorized: tru
 
 Se mantiene el pool existente de **máximo dos conexiones por proceso**, sin mínimo precalentado ni ajuste nuevo. El migrador tiene su propia instancia y la cierra al terminar. Dos procesos de aplicación podrían consumir cuatro conexiones; revisar capacidad antes de multiplicarlos. Solo debe ejecutarse un migrador a la vez.
 
+En Render el servicio web requiere el perfil explícito `supabase-dev`. Configurar `app.txt` y la CA mediante archivos privados de la plataforma. El rol migrador y su clave permanecen en el entorno del operador. Ver [configuración del servicio y verificación pendiente](../../docs/PLAN-SEGURIDAD-DESPLIEGUE.md#render).
+
 ### Procedimiento para un proyecto Supabase autorizado
 
 P04.4b ya fue ejecutada y aprobada en el proyecto de desarrollo, con el alcance de evidencia del cierre. El procedimiento se conserva como referencia: **no autoriza repetir migraciones, preparar otros proyectos ni realizar nuevas escrituras remotas**. Los ejemplos contienen solo parámetros públicos y deben revisarse para cada operación autorizada.

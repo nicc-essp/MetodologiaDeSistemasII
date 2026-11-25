@@ -19,14 +19,17 @@ export function createApp({
   allowedOrigins = parsearOrigenes(),
   representantesHabilitados = new Set<number>(),
   exigirHttpsCuentas = false,
+  proxiesConfiables = [],
 }: {
   almacen?: AlmacenFormularios;
   cuentas?: AlmacenCuentas;
   allowedOrigins?: string[];
   representantesHabilitados?: ReadonlySet<number>;
   exigirHttpsCuentas?: boolean;
+  proxiesConfiables?: string[];
 } = {}) {
   const app = express();
+  if (proxiesConfiables.length) app.set('trust proxy', proxiesConfiables);
   const servicioAuth = crearServicioAuth(cuentas, representantesHabilitados);
   const protegerCuenta = protegerTransporteCuenta(exigirHttpsCuentas);
   app.use(cors({ origin: allowedOrigins }));

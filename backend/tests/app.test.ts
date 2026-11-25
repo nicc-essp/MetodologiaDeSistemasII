@@ -84,7 +84,53 @@ test('un ID inválido impide el arranque antes de leer la configuración Postgre
     },
   };
   await assert.rejects(iniciarServidor({ env, puerto: 0 }), {
-    message: 'No se pudo iniciar el backend al validar la configuración CORS, PostgreSQL y AUTH_REPRESENTANTES_IDS. No se habilitó almacenamiento en memoria.',
+    message: 'No se pudo iniciar el backend al validar la configuración CORS y AUTH_REPRESENTANTES_IDS. No se habilitó almacenamiento en memoria.',
+  });
+  assert.equal(leyóDestino, false);
+});
+
+test('el arranque CLI rechaza PORT inválido sin mostrar su valor', () => {
+  const resultado = spawnSync(process.execPath, ['--import', 'tsx', 'index.ts'], {
+    cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', timeout: 10000,
+    env: { ...process.env, PORT: 'valor-sintetico-no-publicable' },
+  });
+  assert.ifError(resultado.error);
+  assert.equal(resultado.status, 1);
+  assert.equal(resultado.stdout, '');
+  assert.equal(resultado.stderr.trim(), 'No se pudo iniciar el backend al validar PORT. No se habilitó almacenamiento en memoria.');
+});
+
+test('Render exige selección explícita de Supabase y orígenes HTTPS antes de acceder a sus secretos', async () => {
+  let leyoSecretos = false;
+  const perfil = (destino?: string, origenes?: string): NodeJS.ProcessEnv => ({
+    RENDER: 'true',
+    PORT: '10000',
+    POSTGRES_TARGET: destino,
+    CORS_ORIGINS: origenes,
+    get POSTGRES_SECRETS_DIR() {
+      leyoSecretos = true;
+      return 'ruta-sintetica-no-publicable';
+    },
+  });
+  await assert.rejects(iniciarServidor({ env: perfil() }), /validar POSTGRES_TARGET=supabase-dev para Render/);
+  for (const origen of [undefined, 'http://localhost:5173', 'https://app.ejemplo.invalid,http://localhost:5173']) {
+    await assert.rejects(iniciarServidor({ env: perfil('supabase-dev', origen) }),
+      /validar orígenes HTTPS explícitos en CORS_ORIGINS para Render/);
+  }
+  assert.equal(leyoSecretos, false);
+});
+
+test('una lista de proxies inválida falla antes de consultar el destino PostgreSQL', async () => {
+  let leyóDestino = false;
+  const env = {
+    TRUST_PROXY_CIDRS: '127.0.0.1,valor-sintetico-no-publicable',
+    get POSTGRES_TARGET() {
+      leyóDestino = true;
+      return 'local';
+    },
+  };
+  await assert.rejects(iniciarServidor({ env }), {
+    message: 'No se pudo iniciar el backend al validar TRUST_PROXY_CIDRS. No se habilitó almacenamiento en memoria.',
   });
   assert.equal(leyóDestino, false);
 });

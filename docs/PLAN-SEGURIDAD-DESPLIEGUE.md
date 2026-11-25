@@ -59,7 +59,7 @@ Express comprueba el permiso antes de buscar o listar datos y aplica `Cache-Cont
 - **Sesiones.** Para la demostración en una sola instancia se conservan tokens opacos en memoria. Vencen a las ocho horas y se depuran al emitir o comprobar sesiones. Se admiten hasta tres por cuenta y 256 por proceso. La cuarta sustituye a la más antigua de esa cuenta. Si el cupo global está lleno, un nuevo ingreso que requiere otra plaza recibe 503 y las sesiones activas conservan su acceso. Un reinicio o despliegue requiere volver a ingresar. La continuidad entre procesos necesitaría una decisión y una aprobación propias.
 - **Credenciales.** Alta, login y alta privada usan las mismas comprobaciones de correo y contraseña. Se recortan los bordes del correo, se conserva su capitalización y se rechazan contraseñas inválidas o de más de 72 bytes UTF-8 antes de consultar o escribir una cuenta. El login devuelve el mismo error para correo desconocido y contraseña incorrecta y ejecuta bcrypt con un hash sintético en el primer caso. El registro conserva 409 para duplicados, lo que permite deducir la existencia de una cuenta. Su frecuencia está acotada para la demostración. Ante una cuenta ficticia anterior cuya contraseña original superaba el límite, acordar su recuperación antes de usarla: el hash de bcrypt no permite recuperar la longitud original. Las cuentas anteriores quedan intactas y la habilitación de representantes mantiene las reglas de INC-04.
 - **Solicitudes.** Cada ruta tiene una ventana de diez minutos. Se admiten 10 intentos de login por IP y 120 por proceso, 5 registros por IP y 40 por proceso, y 20 envíos de consultas por IP y 120 por proceso. Las solicitudes que alcanzan la ruta cuentan antes del controlador. La API devuelve 429 con `Retry-After`, en segundos. Los límites y el tamaño máximo del JSON cubren el prototipo. En INC-06 se debe comprobar la dirección efectiva de cliente y el proxy de confianza antes de usar esos límites públicamente.
-- **Navegador y transporte.** El perfil de sesión incluye `expiraEn` en milisegundos Unix. React retira el perfil y los datos al vencer o cerrar la sesión. Si la revocación falla, avisa que solo se confirmó el cierre en ese navegador. Las respuestas de cuentas y lecturas protegidas llevan `Cache-Control: no-store`. Con `NODE_ENV=production` el arranque normal exige HTTPS para ambas operaciones. La confianza en el proxy está desactivada y un encabezado reenviado no habilita por sí mismo una petición HTTP. INC-06 debe verificar la terminación TLS y la configuración efectiva de Render. Los orígenes CORS siguen explícitos.
+- **Navegador y transporte.** El perfil de sesión incluye `expiraEn` en milisegundos Unix. React retira el perfil y los datos al vencer o cerrar la sesión. Si la revocación falla, avisa que solo se confirmó el cierre en ese navegador. Las respuestas de cuentas y lecturas protegidas llevan `Cache-Control: no-store`. Con `NODE_ENV=production` el arranque normal exige HTTPS para ambas operaciones. La confianza en proxies parte desactivada. Su habilitación y verificación en el servicio se describen en la [configuración preparada para Render](#render).
 
 ## Incrementos y aceptación
 
@@ -95,10 +95,35 @@ INC-08 añade `node --test scripts/postgres.test.mjs scripts/verificar-docker.te
 
 ### Render
 
-- Servicio Express con directorio raíz `backend/`, Node 22 compatible y pnpm 12.3.4. Comando previsto de instalación `pnpm install --frozen-lockfile` desde ese directorio. El arranque actual es `pnpm start` con `tsx`. Si se elige mantenerlo, conservar `tsx` en la instalación que efectivamente ejecutará el servicio. Registrar los comandos definitivos después de INC-06.
-- Validar `PORT` asignado, escucha en `0.0.0.0` y health check HTTP `/health`. El health actual informa del proceso y el esquema se verifica al arrancar. Configurar `CORS_ORIGINS` con el origen HTTPS exacto de Vercel y aprobar cualquier otro origen de prueba.
-- El perfil esperado para Session pooler usa `POSTGRES_TARGET=supabase-dev`, `POSTGRES_CONNECTION_MODE=session`, `SUPABASE_PROJECT_REF`, `POSTGRES_HOST` exacto, `POSTGRES_PORT=5432`, `POSTGRES_DB=postgres`, `POSTGRES_SECRETS_DIR` y `POSTGRES_SSL_CA_FILE`. Usar las rutas privadas asignadas a `app.txt` y la CA, como `/etc/secrets/` si corresponde. La credencial `migrator.txt` pertenece al entorno separado del operador. Conservar validación de CA y nombre, y verificar que el pool de dos conexiones por proceso sea adecuado.
-- Revisar cierre ordenado y logs seguros. Ver [servicios y puertos en Render](https://render.com/docs/web-services#port-binding) y [archivos privados](https://render.com/docs/configure-environment-variables#secret-files).
+Configuración preparada para que Homero la aplique tras autorizar el primer despliegue. Crear un servicio en Render inicia su primer despliegue. Revisar la configuración y el estado de la base antes de confirmarlo, y mantener el autodespliegue desactivado durante la validación. Para esta demostración se prevé una sola instancia, porque las sesiones y los límites se mantienen por proceso. [Servicios web](https://render.com/docs/web-services) · [Despliegues](https://render.com/docs/deploys)
+
+| Campo de Render | Configuración |
+| --- | --- |
+| Servicio y directorio raíz | Web Service con runtime Node nativo y raíz `backend`. |
+| Versión y dependencias | `NODE_VERSION=22.23.4`, `SKIP_INSTALL_DEPS=true`. Corepack usa el `packageManager` fijado en `pnpm@12.3.4`. |
+| Build Command | `NODE_ENV=development corepack pnpm install --frozen-lockfile && NODE_ENV=development corepack pnpm run typecheck` |
+| Start Command | `exec node --import tsx index.ts` |
+| Health Check Path | `/health` |
+
+Se conserva `tsx` para ejecutar el TypeScript/ESM existente. La instalación explícita incluye `tsx` y TypeScript, y el build valida el código sin emitir JavaScript. `NODE_ENV=development` aplica solo a los comandos de build. El proceso web usa `NODE_ENV=production` y recibe `SIGTERM` directamente. El cierre deja de aceptar solicitudes, espera hasta cinco segundos antes de cerrar conexiones HTTP activas y luego cierra el pool. [Versión de Node](https://render.com/docs/node-version) · [Variables del entorno Node](https://render.com/docs/environment-variables) · [Cierre ordenado](https://render.com/docs/deploys#graceful-shutdown)
+
+| Variable en Render | Valor o procedencia |
+| --- | --- |
+| `PORT` | Puerto asignado por Render. Express escucha en `0.0.0.0` y valida el puerto antes de abrir la base. El valor local por defecto es `3001`. |
+| `NODE_ENV` | `production`. El indicador `RENDER=true` de la plataforma también activa el requisito HTTPS para cuentas y lecturas de consultas. |
+| `CORS_ORIGINS` | Origen HTTPS exacto del frontend autorizado, con comas si se aprueba más de uno. Render exige una configuración explícita, sin fallback a localhost. |
+| `TRUST_PROXY_CIDRS` | IP o CIDR de los proxies verificados que llegan a Express, separados por comas. Mantener vacío hasta confirmar la topología. |
+| `AUTH_REPRESENTANTES_IDS` | Solo IDs habilitados del destino ficticio. Vacío deniega las lecturas. |
+| `POSTGRES_TARGET` y `POSTGRES_CONNECTION_MODE` | `supabase-dev` y `session`. La selección del destino es explícita. |
+| `SUPABASE_PROJECT_REF` y `POSTGRES_HOST` | Referencia del proyecto autorizado y host exacto de **Connect → Session pooler** en ese proyecto. |
+| `POSTGRES_PORT` y `POSTGRES_DB` | `5432` y `postgres`. |
+| `POSTGRES_SECRETS_DIR` y `POSTGRES_SSL_CA_FILE` | `/etc/secrets` y `/etc/secrets/supabase-ca.crt`. |
+
+En el servicio cargar únicamente los archivos privados `app.txt` y `supabase-ca.crt`. La clave del rol de aplicación usa el formato documentado de 48 dígitos hexadecimales en minúscula, sin salto de línea. El backend deriva `docker_laws_app.<REF>` y valida la CA y el nombre del servidor. Las migraciones se preparan por separado con el rol migrador y el proyecto autorizado. Mantener dos conexiones como máximo por proceso y revisar la capacidad del pooler durante la validación, incluida la superposición temporal de instancias en un despliegue. [Archivos privados de Render](https://render.com/docs/configure-environment-variables#secret-files) · [Conexiones de Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres) · [Guía de persistencia](../backend/database/README.md)
+
+Render termina TLS en el proxy y conecta con Express por HTTP. La documentación consultada describe el transporte pero no identifica los rangos de los saltos que alcanzarán nuestro proceso. En una verificación autorizada, confirmar las IP/CIDR de esos proxies y que el último proxy entregue un único `X-Forwarded-Proto: https` y una cadena de direcciones de cliente fiable. Revisar también los posibles accesos internos del servicio. Los rangos de salida de Render corresponden a destinos como la base y no identifican el proxy de entrada. Express empieza sin confianza en encabezados reenviados. Mientras falte esta evidencia, las operaciones protegidas sobre HTTP quedan en 403 y la publicación sigue pendiente. [TLS de servicios web](https://render.com/docs/web-services#connecting-from-the-public-internet) · [Red privada](https://render.com/docs/private-network) · [Rangos de salida](https://render.com/docs/outbound-ip-addresses) · [Express detrás de proxies](https://expressjs.com/en/guide/behind-proxies/)
+
+En la verificación posterior, confirmar `GET /health` con 200 y después el flujo funcional de cuentas y consultas con datos ficticios. Al arrancar se comprueban conexión y esquema. `/health` mide el estado del proceso y por sí solo no detecta una caída posterior de PostgreSQL. Comprobar CORS, HTTPS, dirección efectiva para los límites y un reinicio controlado antes de habilitar la demostración. [Health checks de Render](https://render.com/docs/health-checks)
 
 ### Vercel
 
@@ -163,8 +188,8 @@ Si falla la publicación, mantener restringido el acceso al backend y revisar lo
 | INC-02 | Confirmado en Git | 22 casos HTTP y 7 de React nuevos. Suites completas 310/310 backend y 73/73 frontend. Typecheck, lint y build aprobados. | `e4c1a5c5387bae41946f220d2ec67b871ea7cfe4` |
 | INC-03 | Confirmado en Git | Actualización 001 → 002 con datos previos, esquema y permisos comprobados. 21 casos PostgreSQL, 310 backend y 33 de protecciones aprobados. Recuperación documentada. | `1f57de518bd3d3e21f90f510123558d2aec1bd12` |
 | INC-04 | Confirmado en Git | Alta pública de clientes y lecturas limitadas a representantes habilitados. 325 pruebas backend, 83 frontend y 22 casos PostgreSQL aprobados. Typecheck, lint y build correctos. | `7c1e5cd0bdc131ef88c45b1ce3524c6e101df1dc` |
-| INC-05 | Implementado y verificado localmente | Límites de credenciales, solicitudes y sesiones comprobados. 341 pruebas backend, 91 frontend y 24 casos PostgreSQL aprobados. | Pendiente |
-| INC-06 | Pendiente | Pendiente | Pendiente |
+| INC-05 | Confirmado en Git | Límites de credenciales, solicitudes y sesiones comprobados. 341 pruebas backend, 91 frontend y 24 casos PostgreSQL aprobados. | `f1ca19793009983a2188e9784053e64d404c362e` |
+| INC-06 | Preparado y verificado localmente | Arranque, puerto, health y cierre comprobados. 350 pruebas backend, 91 frontend y 25 casos PostgreSQL aprobados. El proxy de la plataforma queda pendiente de verificación. | Pendiente |
 | INC-07 | Pendiente | Pendiente | Pendiente |
 | INC-08 | Pendiente | Pendiente | Pendiente |
 
@@ -261,4 +286,20 @@ React se verificó con red controlada. Se comprobó el vencimiento visible, la r
 | Configuración Compose de desarrollo y pruebas, y `node --test scripts/postgres.test.mjs` | Compose correcto y **33/33** protecciones aprobadas. Inventario Docker inicial y final idéntico. |
 | `git diff --check` y alcance | Correctos. Las credenciales privadas y Spec Kit siguen excluidos. |
 
-La copia temporal usó Node **22.23.4** y pnpm **12.3.4** con los lockfiles existentes. Las verificaciones usaron datos ficticios y se limitaron al equipo local. Los ensayos de restricciones cambiaron únicamente el esquema de la instancia descartable que crea el runner y restauraron las restricciones esperadas. La configuración de Render, los proxies de confianza y el comportamiento público se verificarán en sus etapas. El commit manual de INC-05 está pendiente.
+La copia temporal usó Node **22.23.4** y pnpm **12.3.4** con los lockfiles existentes. Las verificaciones usaron datos ficticios y se limitaron al equipo local. Los ensayos de restricciones cambiaron únicamente el esquema de la instancia descartable que crea el runner y restauraron las restricciones esperadas. INC-05 quedó confirmado en `f1ca19793009983a2188e9784053e64d404c362e`.
+
+### INC-06 · Evidencia del 25/11/2026
+
+Partida `f1ca197` en `feature/cuentas-usuarios`. El backend valida el puerto, el perfil de Render y la lista de proxies antes de leer credenciales o abrir conexiones. El log del punto de entrada confirmó `0.0.0.0` y el puerto asignado. Una petición a `/health` devolvió 200 y el proceso hijo cerró con código 0 al ejecutar su manejador de `SIGTERM`. En Windows la prueba entrega el evento a Node mediante IPC. La entrega de la señal por Render queda pendiente.
+
+Las pruebas locales de Express comprobaron TLS directo, HTTPS reenviado desde un proxy de prueba autorizado, rechazo de protocolos ambiguos y de un origen de conexión sin confianza, y el cómputo de cupos por cliente detrás de una cadena de proxies simulada. Los ensayos confirmaron que Render requiere un destino explícito y orígenes HTTPS antes de acceder a PostgreSQL. La terminación TLS real y los rangos de entrada del servicio deberán verificarse con autorización posterior.
+
+| Verificación ejecutada | Resultado |
+| --- | --- |
+| Desde `backend`, `corepack pnpm install --frozen-lockfile --offline`, `corepack pnpm run typecheck` y `corepack pnpm run test` | Instalación limpia con Node **22.23.4** y pnpm **12.3.4**, lockfile idéntico, TypeScript correcto y **350/350**. |
+| Desde `frontend`, `corepack pnpm run test`, `corepack pnpm run lint` y `corepack pnpm run build` | **91/91**, ESLint y build de producción correctos. |
+| Desde `backend`, `corepack pnpm run test:postgres --limpiar` | **25 casos hoja** en dos instancias locales descartables. Los totales TAP 12 y 15 incluyen un contenedor cada uno. El inventario Docker inicial y final coincidió. |
+| Configuración Compose de desarrollo y pruebas, y `node --test scripts/postgres.test.mjs` | Compose correcto y **33/33** protecciones aprobadas. |
+| `git diff --check` y alcance | Correctos. Los archivos privados conservan sus exclusiones. |
+
+El primer intento offline detectó que faltaba el tarball de `bcryptjs@3.0.3`. Se recuperó la versión fijada desde el registro público de npm y se repitió la instalación offline en otra copia sin `node_modules`. La preparación queda lista para commit manual. Las verificaciones del servicio en Render y de la base Supabase requieren autorización específica.

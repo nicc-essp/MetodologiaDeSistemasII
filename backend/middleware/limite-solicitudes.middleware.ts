@@ -1,4 +1,5 @@
 import type { RequestHandler } from 'express';
+import { isIP } from 'node:net';
 
 const ventanaMs = 10 * 60 * 1000;
 
@@ -14,7 +15,8 @@ export function limitarSolicitudes(porIp: number, total: number): RequestHandler
       intentos.clear();
       acumuladas = 0;
     }
-    const ip = req.ip ?? req.socket.remoteAddress ?? '';
+    const ipCliente = req.ip;
+    const ip = ipCliente && isIP(ipCliente) ? ipCliente : req.socket.remoteAddress ?? '';
     const usadas = intentos.get(ip) ?? 0;
     if (usadas >= porIp || acumuladas >= total) {
       res.set('Retry-After', String(Math.ceil((vence - ahora) / 1000)));

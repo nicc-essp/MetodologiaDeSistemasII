@@ -313,8 +313,10 @@ El cuerpo debe proporcionarse como JSON. Estructuras o JSON inválidos reciben u
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Base HTTP(S) alcanzable desde el navegador; admite un prefijo de ruta. | `http://localhost:3001` |
 | `CORS_ORIGINS` | Orígenes HTTP(S) permitidos, separados por comas. | `http://localhost:5173` |
+| `PORT` | Puerto HTTP del backend en ejecución directa. En Compose el servicio conserva `3001`. | `3001` |
+| `TRUST_PROXY_CIDRS` | IP o CIDR de los proxies autorizados, separados por comas. Solo para redes verificadas. | Lista vacía |
 
-Ausente o en blanco conserva el valor predeterminado; una configuración explícita inválida produce un error y no se sustituye silenciosamente. CORS controla lectura del navegador, no autentica ni autoriza usuarios.
+`PORT` debe ser un entero decimal entre 1 y 65535 si se define. Si cambia, ajustar `VITE_API_BASE_URL` en el frontend. En desarrollo, CORS conserva el origen local cuando la variable está ausente o vacía. CORS controla desde qué orígenes se puede leer la API en el navegador. Express verifica la sesión y el permiso al atender cada lectura. Los encabezados reenviados se interpretan solo detrás de proxies configurados. [Configuración preparada para Render](docs/PLAN-SEGURIDAD-DESPLIEGUE.md#render)
 
 Para Compose, `.env.example` documenta estas variables y la lista de representantes del backend. Se puede copiar como `.env` y ajustar para el entorno local. En ejecución local, Vite puede leer `frontend/.env` a partir de `frontend/.env.example`; el backend carga el `.env` de la raíz y da prioridad a las variables del proceso. Por ejemplo, en terminales PowerShell separadas:
 

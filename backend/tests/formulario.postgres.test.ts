@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { fork, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { QueryTypes } from 'sequelize';
@@ -114,6 +115,44 @@ test('API HTTP con PostgreSQL descartable: persistencia, validación, fallos y c
         assert.deepEqual(await login.json(), { message: 'Esta operación requiere HTTPS' });
       } finally {
         await produccion.cerrar();
+      }
+    });
+
+    await t.test('el punto de entrada usa PORT y cierra ordenadamente al recibir SIGTERM', { timeout: 20000 }, async prueba => {
+      const puerto = await withHttp((_req, res) => res.end(), async base => new URL(base).port);
+      // La entrega de señales del sistema en Windows no prueba los manejadores POSIX de Node.
+      const simularSenal = `process.once('message', () => {
+        process.disconnect();
+        process.emit('SIGTERM', 'SIGTERM');
+      });`;
+      const hijo = fork(fileURLToPath(new URL('../index.ts', import.meta.url)), [], {
+        cwd: fileURLToPath(new URL('../', import.meta.url)),
+        env: { ...env, PORT: puerto, RENDER: undefined, TRUST_PROXY_CIDRS: undefined },
+        execArgv: ['--import', 'tsx', '--import', `data:text/javascript,${encodeURIComponent(simularSenal)}`],
+        silent: true,
+      });
+      let salida = '';
+      hijo.stdout!.setEncoding('utf8').on('data', texto => { salida += texto; });
+      const cerrado = once(hijo, 'close');
+      try {
+        await Promise.race([
+          once(hijo.stdout!, 'data', { signal: prueba.signal }),
+          cerrado.then(() => { throw new Error('El proceso hijo terminó antes de escuchar HTTP.'); }),
+        ]);
+        assert.equal(salida.trim(), `Backend escuchando en 0.0.0.0:${puerto}.`);
+        const health = `http://127.0.0.1:${puerto}/health`;
+        const respuesta = await fetch(health, { signal: prueba.signal });
+        assert.equal(respuesta.status, 200);
+        assert.deepEqual(await respuesta.json(), { status: 'ok' });
+        const salidaHijo = once(hijo, 'exit', { signal: prueba.signal });
+        hijo.send('cerrar');
+        assert.deepEqual(await salidaHijo, [0, null]);
+        await cerrado;
+        assert.match(salida, /Backend detenido\./);
+        await assert.rejects(fetch(health, { signal: AbortSignal.timeout(2000) }));
+      } finally {
+        if (hijo.exitCode === null && hijo.signalCode === null) hijo.kill();
+        await cerrado;
       }
     });
 

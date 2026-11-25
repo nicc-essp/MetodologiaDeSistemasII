@@ -9,7 +9,7 @@ import { crearAlmacenFormularios } from '../data/formularios-guardados';
 import { limitarSolicitudes } from '../middleware/limite-solicitudes.middleware';
 import { publico } from '../models/usuario.model';
 import { crearServicioAuth } from '../services/auth.service';
-import { datosRepresentanteFicticio, representanteFicticio } from './helpers/auth';
+import { datosRepresentanteFicticio, representanteEnMemoria, representanteFicticio } from './helpers/auth';
 import { consultaFicticia } from './helpers/fixtures';
 import { withHttp } from './helpers/http';
 
@@ -137,6 +137,51 @@ test('la política HTTPS admite el alta local con TLS real y CA sintética verif
   } finally {
     if (servidor.listening) await new Promise<void>(ok => servidor.close(() => ok()));
   }
+});
+
+test('HTTPS reenviado solo se admite desde un proxy configurado y con un protocolo inequívoco', async () => {
+  for (const [proxy, esperado] of [['192.0.2.10', 403], ['127.0.0.1/32', 200]] as const) {
+    const app = createApp({
+      ...representanteEnMemoria(), proxiesConfiables: [proxy], exigirHttpsCuentas: true,
+    });
+    await withHttp(app, async base => {
+      const ingresar = (protocolo: string) => fetch(base + '/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': protocolo },
+        body: JSON.stringify({
+          email: datosRepresentanteFicticio.email, password: datosRepresentanteFicticio.password,
+        }),
+      });
+      for (const ambiguo of ['https, http', 'http, https', 'http']) {
+        assert.equal((await ingresar(ambiguo)).status, 403);
+      }
+      const respuesta = await ingresar('https');
+      assert.equal(respuesta.status, esperado);
+      assert.equal(respuesta.headers.get('cache-control'), 'no-store');
+      const datos = await respuesta.json() as { token?: string };
+      assert.equal(typeof datos.token, esperado === 200 ? 'string' : 'undefined');
+    });
+  }
+});
+
+test('el límite por IP se aplica al cliente detrás de proxies identificados', async () => {
+  const app = createApp({ proxiesConfiables: ['127.0.0.1', '203.0.113.7'], exigirHttpsCuentas: true });
+  await withHttp(app, async base => {
+    const intentar = (cadena: string) => fetch(base + '/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https', 'X-Forwarded-For': cadena,
+      },
+      body: '{}',
+    });
+    for (let i = 1; i <= 10; i++) {
+      const respuesta = await intentar(`198.51.100.${i}, 192.0.2.4, 203.0.113.7`);
+      assert.equal(respuesta.status, 400);
+      await respuesta.text();
+    }
+    assert.equal((await intentar('198.51.100.11, 192.0.2.4, 203.0.113.7')).status, 429);
+    assert.equal((await intentar('192.0.2.5, 203.0.113.7')).status, 400);
+  });
 });
 
 test('al emitir una cuarta sesión solo se revoca la más antigua de esa cuenta', async () => {
