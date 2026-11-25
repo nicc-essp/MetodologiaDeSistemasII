@@ -157,8 +157,8 @@ Si falla la publicación, mantener restringido el acceso al backend y revisar lo
 
 | Incremento | Estado | Resultado verificado | Commit manual |
 | --- | --- | --- | --- |
-| INC-01 | Implementado y verificado localmente | B01 e I05 resueltos. DTO sin uso retirados. 288 backend y 66 frontend aprobados, más typecheck, ESLint, build y comprobación HTTP dirigida. | Pendiente |
-| INC-02 | Pendiente | Pendiente | Pendiente |
+| INC-01 | Confirmado en Git | B01 e I05 resueltos. DTO sin uso retirados. 288 backend y 66 frontend aprobados, más typecheck, ESLint, build y comprobación HTTP dirigida. | `43f08070fdaf8fa34a8f19684a2772a21aa0d303` |
+| INC-02 | Implementado y verificado localmente | 22 casos HTTP y 7 de React nuevos. Suites completas 310/310 backend y 73/73 frontend. Typecheck, lint y build aprobados. | Pendiente |
 | INC-03 | Pendiente | Pendiente | Pendiente |
 | INC-04 | Pendiente de aprobación de política | Pendiente | Pendiente |
 | INC-05 | Pendiente | Pendiente | Pendiente |
@@ -184,4 +184,25 @@ Se verificaron los cambios en la copia temporal de la PR con Node **22.23.4** y 
 | Comprobación HTTP dirigida con servidor efímero y almacén ficticio | Alta 201, entrada inválida 400, duplicado 409, credenciales o sesión inválidas 401, login/perfil 200 y logout 204. Fallos simulados de escritura y lectura devolvieron 500 con `{"message":"Error interno del servidor"}` en registro, login y perfil. |
 | Revisión del diff y `git diff --check` | Solo los archivos del incremento y este registro. Sin errores de espacios. |
 
-Se ejecutaron **354 casos de las suites** y la comprobación HTTP dirigida por separado. Las pruebas nuevas versionadas corresponden a INC-02. PostgreSQL real, Docker y los servicios remotos quedaron fuera de estas verificaciones. Siguen pendientes el commit manual y su confirmación antes de avanzar.
+Se ejecutaron **354 casos de las suites** y la comprobación HTTP dirigida por separado. Las pruebas nuevas versionadas corresponden a INC-02. PostgreSQL real, Docker y los servicios remotos quedaron fuera de estas verificaciones. En ese momento el commit manual todavía estaba pendiente.
+
+Homero registró INC-01 en `43f0807`. Al retomar, el commit coincidió con los nueve archivos previstos y el árbol de trabajo estaba limpio.
+
+### INC-02 · Evidencia del 24/11/2026
+
+Partida `43f0807` en `feature/cuentas-usuarios`. Se agregaron [pruebas HTTP de cuentas](../backend/tests/auth.http.test.ts) con Express real en loopback y almacenes en memoria y [pruebas de cuentas en React](../frontend/src/App.auth.test.jsx) con `fetch` controlado. El manifiesto backend incorpora la suite HTTP al comando `test`. Las pruebas existentes, el código de aplicación y las dependencias se conservaron.
+
+Los **22 casos de backend** comprueban alta válida, hash verificable y respuestas públicas sin contraseña ni hash, entradas y contraseñas inválidas rechazadas antes de consultar o escribir, duplicados sin sobrescritura, login correcto e incorrecto, token omitido o desconocido, vencimiento con reloj controlado, logout, revocación y 500 seguro ante fallos de escritura o lectura. Los **7 casos de frontend** comprueban registro con login posterior, duplicado, login con restauración de perfil, avisos ante 401/500, descarte de sesión rechazada por el servidor y logout exitoso.
+
+Verificación en la copia temporal con las dependencias de los lockfiles, Node **22.23.4** y pnpm **12.3.4**.
+
+| Verificación ejecutada | Resultado |
+| --- | --- |
+| `pnpm --dir backend with current test` | **310/310**, incluidos los 22 casos nuevos. |
+| `pnpm --dir frontend with current test --no-cache --configLoader runner` | **73/73** en seis archivos, incluidos los 7 casos nuevos. |
+| `pnpm --dir backend with current typecheck` | Correcto con el perfil existente. |
+| `pnpm --dir frontend with current lint` | Correcto. |
+| `pnpm --dir frontend with current build --configLoader runner --outDir <salida-temporal>` | Correcto, 38 módulos transformados. |
+| `git diff --check` y revisión del alcance | Sin errores de espacios. Solo cambiaron las dos pruebas nuevas, el script `test` de backend y este registro. |
+
+Se ejecutaron **383 casos de las dos suites**. PostgreSQL real queda para INC-03. El manejo de logout fallido, los límites de credenciales y el endurecimiento de sesiones quedan para INC-05. La autorización de consultas sigue pendiente de INC-04. El commit de INC-02 es manual y se verificará antes de avanzar.
