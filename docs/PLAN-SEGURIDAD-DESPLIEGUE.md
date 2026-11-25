@@ -182,12 +182,12 @@ Si falla la publicación, mantener restringido el acceso al backend y revisar lo
 ## Checklist de publicación supervisada
 
 - [ ] INC-01–INC-08 confirmados en Git, con diff revisado y resultados registrados.
-- [ ] D05/D06 aprobadas para la demostración. Por HTTP directo anónimos y clientes quedan excluidos de la lectura de consultas.
-- [ ] Procedimiento privado de representantes ficticios y cuentas preexistentes revisados.
+- [x] D05/D06 aprobadas para la demostración. Por HTTP directo, anónimos y clientes quedan excluidos de la lectura en la regresión local.
+- [ ] Revisar cuentas preexistentes y acordar el alta administrada de representantes ficticios en el destino remoto. El comando de alta se verificó para PostgreSQL local.
 - [ ] Destino y respaldo Supabase confirmados. Migración, permisos, historial y exposición de Data API comprobados con autorización remota.
 - [ ] Render inicia con rol de aplicación, TLS verificado y health correcto. Recuperación pactada.
 - [ ] Build Vercel y recargas SPA comprobados. HTTPS, CORS, autenticación y logout verificados desde navegador.
-- [ ] Consulta ficticia creada y recuperada bajo el permiso previsto. Persistencia después de reiniciar Express y efecto sobre sesiones registrados.
+- [x] Consulta ficticia creada y recuperada en la regresión local. Persistencia después de reiniciar Express y efecto sobre sesiones registrados.
 - [ ] Evidencia y decisión de publicación registradas. El acceso público queda condicionado a los controles de lectura y demás criterios verificados.
 
 ## Seguimiento
@@ -200,8 +200,8 @@ Si falla la publicación, mantener restringido el acceso al backend y revisar lo
 | INC-04 | Confirmado en Git | Alta pública de clientes y lecturas limitadas a representantes habilitados. 325 pruebas backend, 83 frontend y 22 casos PostgreSQL aprobados. Typecheck, lint y build correctos. | `7c1e5cd0bdc131ef88c45b1ce3524c6e101df1dc` |
 | INC-05 | Confirmado en Git | Límites de credenciales, solicitudes y sesiones comprobados. 341 pruebas backend, 91 frontend y 24 casos PostgreSQL aprobados. | `f1ca19793009983a2188e9784053e64d404c362e` |
 | INC-06 | Confirmado en Git | Arranque, puerto, health y cierre comprobados. 350 pruebas backend, 91 frontend y 25 casos PostgreSQL aprobados. El proxy de la plataforma queda pendiente de verificación. | `5d6153f1f095bd1c0b79c3c0995ff1115c929652` |
-| INC-07 | Preparado y verificado localmente | Build a `dist` con origen HTTPS obligatorio. Acceso directo y recarga de cuatro rutas en Chrome. 108 pruebas frontend y 350 backend aprobadas. | Pendiente |
-| INC-08 | Pendiente | Pendiente | Pendiente |
+| INC-07 | Confirmado en Git | Build a `dist` con origen HTTPS obligatorio. Acceso directo y recarga de cuatro rutas en Chrome. 108 pruebas frontend y 350 backend aprobadas. | `320044f3471a592768866216a541c8797d1e43af` |
+| INC-08 | Regresión local aprobada | 548 casos hoja, verificación de contextos e imágenes y recorrido real Chrome–React–Express–PostgreSQL. Publicación pendiente de validación remota. | Pendiente |
 
 La actualización desde `001`, los permisos de lectura y el endurecimiento de cuentas se verificaron localmente. Antes de publicar quedan la revisión de la base remota y de sus representantes, la terminación HTTPS y la dirección de cliente vistas por Express detrás del proxy, y las comprobaciones del flujo publicado. La interrupción entre DDL e historial tiene un procedimiento de diagnóstico. Revisar el estado antes de reintentar una migración interrumpida.
 
@@ -327,4 +327,26 @@ Partida `5d6153f` en `feature/cuentas-usuarios`. Se agregó la configuración ve
 | Desde `backend`, `corepack pnpm run test` y `corepack pnpm run typecheck` | **350/350** y TypeScript correcto. |
 | `git diff --check` y alcance | Correctos, con las exclusiones privadas verificadas. |
 
-Las pruebas se ejecutaron en una copia temporal, con datos ficticios. La comprobación en Chrome acredita las vistas compiladas con un servidor local y no reproduce la infraestructura de Vercel. Las reescrituras en la plataforma, el origen CORS definitivo y el flujo con la API desplegada conservan su verificación pendiente. INC-07 queda listo para commit manual.
+Las pruebas se ejecutaron en una copia temporal, con datos ficticios. La comprobación en Chrome acredita las vistas compiladas con un servidor local. Las reescrituras en la plataforma, el origen CORS definitivo y el flujo con la API desplegada conservan su verificación pendiente. INC-07 quedó confirmado en `320044f3471a592768866216a541c8797d1e43af`.
+
+### INC-08 · Evidencia del 25/11/2026
+
+Partida `320044f` en `feature/cuentas-usuarios`, con árbol limpio. Se copiaron los archivos rastreados con verificación de huellas a un directorio temporal sin archivos privados ni `node_modules`. En ambos componentes se instaló con `corepack pnpm install --frozen-lockfile --offline`, Node **22.23.4** y pnpm **12.3.4**. Las instalaciones conservaron los lockfiles. El recorrido y las pruebas usaron datos ficticios y destinos en loopback.
+
+| Verificación ejecutada | Resultado | Casos contados |
+| --- | --- | ---: |
+| `corepack pnpm --dir backend run test` y `corepack pnpm --dir backend run typecheck` | Suite y comprobación de tipos aprobadas. Incluye autorización, validación y TLS con fixtures locales. | 350 |
+| `corepack pnpm --dir frontend run test`, `lint`, `build` y `build --mode vercel` | Suite, lint y ambos builds aprobados. El modo Vercel usó un origen HTTPS ficticio. | 108 |
+| `node --test scripts/postgres.test.mjs scripts/verificar-docker.test.mjs` | Autopruebas de protección, CLI y verificadores aprobadas. | 65 |
+| `corepack pnpm --dir backend run test:postgres --limpiar` | Migración desde una base con `001` y desde base vacía, roles, restricciones, API y cierre correctos. | 25 |
+| **Total de casos hoja aprobados** | Los totales TAP de PostgreSQL fueron 12 y 15. Se excluyó el caso contenedor de cada suite. | **548** |
+
+Las verificaciones operativas adicionales quedaron registradas por separado del total. Compose de desarrollo y pruebas validó. `node scripts/verificar-docker.mjs --modo contexto` y `node scripts/verificar-docker.mjs --modo imagenes` pasaron en ambos componentes. Se comprobaron 24 fixtures privados ficticios por componente en cada modalidad, con cero contenidos privados encontrados y el control público presente. Cada imagen tuvo diez capas y dos configuraciones inspeccionadas, con Node **22.23.5** en la imagen base local. `node scripts/postgres.mjs verificar --limpiar` confirmó PostgreSQL **17.12**, autenticación, roles, permisos, persistencia del volumen tras reiniciar PostgreSQL y aislamiento de desarrollo y pruebas. Los runners retiraron sus recursos nuevos identificados. El inventario anterior y posterior fue idéntico.
+
+**Recorrido de aplicación.** Chrome headless usó el build React servido en loopback, Express real y una instancia adicional del runner PostgreSQL descartable con `001` y `002`. El preflight autorizó Bearer para el origen configurado y omitió el permiso para un origen ajeno. Una persona anónima envió una consulta y recibió confirmación en la interfaz. El listado y el detalle del registro existente devolvieron 401 por HTTP directo. Un cliente se registró e inició sesión desde React, recibió 403 en ambas lecturas y cerró sesión con revocación confirmada. Un representante ficticio habilitado mediante el comando privado vio la consulta en React y la recuperó por listado y detalle. Al reiniciar Express, la sesión anterior se rechazó y la interfaz regresó al estado anónimo. Tras ingresar de nuevo, se verificaron el mismo ID y los siete campos persistidos, y se volvió a confirmar la revocación al cerrar sesión.
+
+**Dictamen.** Regresión local aprobada. **Publicación pública pendiente.** Antes de habilitar la demostración se requiere:
+
+1. **Supabase.** Confirmar con autorización la revisión y el destino, el respaldo y el camino de restauración, el historial real de `002`, las restricciones, roles, TLS y Data API. Si corresponde aplicar `002`, hacerlo mediante el procedimiento separado de esta guía. Revisar cuentas anteriores y aprobar el alta administrada y los IDs de representantes de esa base. El acceso a la colección completa se limita a la demostración con datos exclusivamente ficticios.
+2. **Render.** Verificar arranque con el rol restringido, TLS hacia PostgreSQL, health, proxy de entrada, precedencia de encabezados e IP efectiva para los límites. Confirmar la autorización con peticiones directas al servicio antes de darle acceso público.
+3. **Vercel e integración.** Confirmar el origen HTTPS real en `CORS_ORIGINS`, el destino público del build, las reescrituras, preflight y el recorrido en las plataformas. La regresión local deja lista la revisión del commit de INC-08. Cualquier ejecución en los servicios requiere autorización expresa.
