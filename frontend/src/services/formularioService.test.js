@@ -8,6 +8,8 @@ beforeEach(() => {
 });
 
 it('conserva POST/GET/lista/detalle y sus datos', async () => {
+  const token = 'token-ficticio';
+  sessionStorage.setItem('docker-laws-token', token);
   fetch.mockResolvedValueOnce(respuestaJson(formularioFicticio, 201));
   await expect(crearFormulario(consultaFicticia)).resolves.toEqual(formularioFicticio);
   expect(fetch).toHaveBeenLastCalledWith('http://localhost:3001/formulario', {
@@ -15,11 +17,28 @@ it('conserva POST/GET/lista/detalle y sus datos', async () => {
   });
   fetch.mockResolvedValueOnce(respuestaJson([formularioFicticio]));
   await expect(obtenerFormularios()).resolves.toEqual([formularioFicticio]);
+  expect(fetch).toHaveBeenLastCalledWith('http://localhost:3001/formulario', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   fetch.mockResolvedValueOnce(respuestaJson(formularioFicticio));
   await expect(obtenerFormulario(1)).resolves.toEqual(formularioFicticio);
-  expect(fetch).toHaveBeenLastCalledWith('http://localhost:3001/formulario/1', undefined);
+  expect(fetch).toHaveBeenLastCalledWith('http://localhost:3001/formulario/1', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   fetch.mockResolvedValueOnce(respuestaJson([]));
   await expect(obtenerFormularios()).resolves.toEqual([]);
+});
+
+it.each([[401, 'sesion'], [403, 'permiso']])('distingue HTTP %i al consultar un detalle', async (status, categoria) => {
+  fetch.mockResolvedValueOnce(respuestaJson({ message: 'detalle interno ficticio' }, status));
+  await expect(obtenerFormulario(1)).rejects.toMatchObject({ categoria, message: '' });
+});
+
+it('comunica el límite de envíos con un mensaje propio', async () => {
+  fetch.mockResolvedValueOnce(respuestaJson({ message: 'detalle interno ficticio' }, 429));
+  const error = await crearFormulario(consultaFicticia).catch(error => error);
+  expect(obtenerMensajeError(error, 'envio')).toBe('Alcanzaste el límite de envíos. Esperá e intentá nuevamente.');
+  expect(fetch).toHaveBeenCalledTimes(1);
 });
 
 describe('respuestas incompatibles no son éxito', () => {

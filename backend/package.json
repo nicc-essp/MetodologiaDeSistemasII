@@ -5,10 +5,11 @@
   "main": "index.ts",
   "scripts": {
     "start": "node --env-file-if-exists=../.env --import tsx index.ts",
-    "test": "node --import tsx --test tests/formulario.validation.test.ts tests/formularios-guardados.test.ts tests/formulario.http.test.ts tests/app.test.ts tests/app.config.test.ts tests/typecheck.test.ts tests/database.test.ts tests/database.supabase.test.ts",
+    "test": "node --import tsx --test tests/formulario.validation.test.ts tests/formularios-guardados.test.ts tests/formulario.http.test.ts tests/app.test.ts tests/app.config.test.ts tests/typecheck.test.ts tests/database.test.ts tests/database.supabase.test.ts tests/auth.http.test.ts tests/auth.seguridad.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "db:migrate": "node --env-file-if-exists=../.env --import tsx database/migrate.ts up",
     "db:status": "node --env-file-if-exists=../.env --import tsx database/migrate.ts status",
+    "cuenta:crear-representante": "node --env-file-if-exists=../.env --import tsx scripts/crear-representante.ts",
     "test:postgres": "node ../scripts/verificar-migraciones.mjs"
   },
   "keywords": [],
@@ -24,6 +25,7 @@
   "packageManager": "pnpm@12.3.4",
   "type": "module",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "pg": "8.23.1",

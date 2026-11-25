@@ -9,7 +9,7 @@ import { ConnectionError } from 'sequelize';
 import { MigrationError } from 'umzug';
 import { leerConfiguracionPostgres } from '../config/database.config';
 import { crearConexionPostgres } from '../database/connection';
-import { crearMigrador, describirErrorPostgres, leerComando, migracionInicial } from '../database/migrate';
+import { crearMigrador, describirErrorPostgres, leerComando, migracionInicial, migracionUsuarios } from '../database/migrate';
 import { definirConsulta } from '../models/consulta.model';
 
 function conCredenciales(run: (env: NodeJS.ProcessEnv) => void) {
@@ -79,7 +79,7 @@ test('modelo y registro de migraciones se preparan sin conectar ni sincronizar n
       if (nombre !== 'id') assert.equal(String(atributo.type), 'TEXT');
     }
     const migrador = crearMigrador(conexion);
-    assert.deepEqual((await migrador.migrations(conexion.getQueryInterface())).map(m => m.name), [migracionInicial]);
+    assert.deepEqual((await migrador.migrations(conexion.getQueryInterface())).map(m => m.name), [migracionInicial, migracionUsuarios]);
     assert.equal(conexion.model('SequelizeMeta').tableName, 'SequelizeMeta');
     assert.equal(conexion.model('SequelizeMeta').options.schema, 'app');
   } finally { await conexion.close(); }

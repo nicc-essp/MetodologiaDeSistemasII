@@ -34,7 +34,7 @@ pnpm --dir backend db:status
 pnpm --dir backend start
 ```
 
-Los comandos `start` y `db:*` cargan el `.env` opcional de la raíz con Node, sin agregar dotenv; las variables del proceso tienen prioridad. Se reutilizan `POSTGRES_DB`, `POSTGRES_PORT` y `POSTGRES_SECRETS_DIR` de P03, más `POSTGRES_HOST` para el cliente. Predeterminados: `127.0.0.1:5433`, `docker_laws_dev`, `secrets/postgres/`. Una ruta relativa de secretos se interpreta desde la raíz del repositorio. `.env.example` contiene parámetros públicos; las contraseñas siguen en archivos privados ignorados y no se imprimen.
+Los comandos `start`, `db:*` y `cuenta:crear-representante` cargan el `.env` opcional de la raíz con Node; las variables del proceso tienen prioridad. Se reutilizan `POSTGRES_DB`, `POSTGRES_PORT` y `POSTGRES_SECRETS_DIR` de P03, más `POSTGRES_HOST` para el cliente. Predeterminados: `127.0.0.1:5433`, `docker_laws_dev`, `secrets/postgres/`. Una ruta relativa de secretos se interpreta desde la raíz del repositorio. `.env.example` contiene parámetros públicos; las contraseñas siguen en archivos privados ignorados y no se imprimen.
 
 El preparador genera las claves en `secrets/postgres/` de esta copia; no importa claves ajenas ni las rota en una instancia inicializada. Los comandos anteriores utilizan el proyecto Compose de esa carpeta. Para ensayar desde cero sin reutilizar recursos habituales, seguir la [secuencia aislada del checklist](../../docs/CHECKLIST.md#134-secuencia-powershell-para-la-próxima-reproducción-limpia-pendiente); todavía no fue ejecutada. En la modalidad con aplicaciones en el host solo PostgreSQL requiere Docker; en la modalidad Compose los tres servicios se ejecutan en contenedores. Ver [README principal](../../README.md#instalación-e-inicio).
 
@@ -44,7 +44,7 @@ El esquema `app` debe existir y pertenecer al migrador: lo prepara P03 sobre vol
 
 ## Arranque, API y cierre — P04.3
 
-`index.ts` valida CORS/configuración, autentica el rol de aplicación y prepara `data/formularios-postgres.ts` antes de abrir HTTP. El adaptador comprueba las ocho columnas, tipos, clave primaria y generación de ID, acceso de lectura, permisos de inserción/secuencia y existencia del historial técnico. Solo consulta metadatos de ese historial: sus registros siguen reservados al migrador y se revisan con `db:status`. No ejecuta migraciones ni `sync()` de negocio.
+`index.ts` valida CORS, PostgreSQL y la lista de representantes habilitados, autentica el rol de aplicación y prepara los almacenes de consultas y cuentas antes de abrir HTTP. El adaptador de consultas comprueba las ocho columnas, tipos, clave primaria y generación de ID, acceso de lectura, permisos de inserción/secuencia y existencia del historial técnico. Solo consulta metadatos de ese historial: sus registros siguen reservados al migrador y se revisan con `db:status`. Las migraciones se ejecutan de forma explícita.
 
 El adaptador cumple `AlmacenFormularios`: crear, listar por ID ascendente y buscar por ID. Proyecta objetos públicos con ID y los siete textos, sin instancias Sequelize. Conserva la conversión histórica de IDs y devuelve 404 para valores inexistentes, fraccionarios, no finitos o fuera de INTEGER. PostgreSQL comienza sin seed; recrear el backend no borra consultas.
 
@@ -56,6 +56,21 @@ SIGINT/SIGTERM cierran primero HTTP y después el pool Sequelize; el cierre es i
 
 Para ejecutar el stack completo, aplicar primero la migración desde el host y después usar `docker compose up --build`. PostgreSQL ya es una dependencia normal, sin perfil optativo. Compose entrega al backend `POSTGRES_HOST=postgres`, puerto interno 5432 y **solo** el secreto de aplicación montado como `/run/secrets/postgres/app.txt`. Las claves de administrador/migrador no se montan en ese servicio. El puerto 5433 permanece local para herramientas del host. Todos los puertos publicados siguen limitados a `127.0.0.1`.
 
+## Alta privada de un representante ficticio
+
+1. Preparar PostgreSQL local con datos ficticios y aplicar `001` y `002` explícitamente. Ejecutar el alta desde el host con `POSTGRES_TARGET=local`, una dirección de loopback literal (`127.0.0.1` o `::1`) y las credenciales privadas de `docker_laws_app`.
+2. Crear `secrets/representante-local.json` en UTF-8. La carpeta `secrets/` está excluida de Git. El objeto contiene `nombre`, `email` y `password`; usar un correo ficticio como `representante@ejemplo.invalid` y una contraseña ficticia inédita de al menos ocho caracteres.
+3. Desde la raíz del repositorio, ejecutar el comando con la ruta del archivo privado.
+
+   ```powershell
+   $archivoRepresentante = (Resolve-Path -LiteralPath './secrets/representante-local.json').Path
+   pnpm --dir backend cuenta:crear-representante $archivoRepresentante
+   ```
+
+4. El comando muestra el ID de la cuenta creada. Agregar solo ese ID a `AUTH_REPRESENTANTES_IDS` en el `.env` local, como entero positivo o en una lista separada por comas. Reiniciar el backend con esa configuración o recrear su servicio en Compose para que reciba la variable. Iniciar sesión y verificar el acceso a las consultas ficticias.
+
+El alta utiliza bcrypt y el permiso `INSERT` del rol de aplicación. Ante duplicados, sale con error y conserva la cuenta existente. La contraseña se lee del archivo y el comando entrega únicamente el ID de la cuenta en caso de éxito. La lista de habilitación pertenece a una base concreta: dejarla vacía al cambiar o recrear la base y volver a registrar los nuevos IDs por este procedimiento. El comando solo admite PostgreSQL local. El acceso completo cubre exclusivamente la demostración académica con datos ficticios; el uso productivo requiere permisos de acceso por registro.
+
 ## Esquema, historial y permisos
 
 - `models/consulta.model.ts` define `app.consultas`: `id` INTEGER, PK autogenerada mediante secuencia PostgreSQL; siete TEXT NOT NULL (`nombre`, `apellido`, `dni`, `telefono`, `email`, `asunto`, `mensaje`); `timestamps: false`, sin relaciones ni unicidades nuevas de contacto.
@@ -66,6 +81,44 @@ Para ejecutar el stack completo, aplicar primero la migración desde el host y d
 La segunda ejecución consulta el historial y no repite la migración. La CLI solo admite `up` y `status`; no expone `down`, `rerun` ni limpieza de bases. Los fallos producen salida distinta de cero y mensajes seguros con nombre de migración o SQLSTATE cuando corresponda.
 
 Ejecutar un solo runner a la vez. La transacción de la migración protege su DDL y concesiones; el registro posterior de Umzug es otra operación. Si el proceso se interrumpe entre ambas, revisar tabla e historial antes de reintentar. Este incremento no agrega coordinación entre migradores concurrentes ni recuperación destructiva.
+
+## Actualización local de 001 a 002
+
+La revisión que incorpora cuentas prepara los almacenes de consultas y usuarios antes de abrir HTTP. Una base con solo `001-crear-consultas` requiere aplicar explícitamente `002-crear-usuarios` antes de arrancar ese backend. `002` agrega `app.usuarios` y su secuencia en una transacción. Se conservan `app.consultas`, sus permisos y el registro de `001`. El rol migrador posee los objetos nuevos. El rol de aplicación recibe `SELECT` e `INSERT` sobre usuarios y `USAGE` sobre su secuencia, y conserva la separación respecto del historial.
+
+El arranque de INC-05 comprueba en el catálogo PostgreSQL que `UNIQUE(email)` tenga un índice válido y que `usuarios_tipo_check` restrinja el tipo a `cliente` o `representante`, tal como define `002`. Usa el rol de aplicación y consultas de solo lectura. Una discrepancia impide abrir HTTP. Para diagnosticarla, revisar el historial y el esquema con el procedimiento de recuperación de esta guía.
+
+1. En el destino local acordado, verificar la revisión que se desea arrancar, la configuración de conexión y el respaldo cuando corresponda. Antes de migrar, revisar que el historial contenga `001`, que `app.usuarios` y su secuencia no estén creadas, y registrar el conteo de consultas. Hacer la comprobación con un solo migrador y una terminal con configuración local.
+2. Ejecutar los siguientes comandos desde la raíz, uno por uno. Continuar solo si el paso anterior terminó correctamente. En el estado esperado, la CLI aplica únicamente `002-crear-usuarios`.
+
+   ```powershell
+   pnpm --dir backend db:migrate
+   pnpm --dir backend db:status
+   ```
+
+3. Confirmar `001` y `002` en el historial, sin pendientes, y el conteo conservado de consultas. Verificar las cinco columnas `NOT NULL`, PK `id`, `UNIQUE(email)`, `usuarios_tipo_check`, índices válidos, secuencia y permisos. Arrancar Express con `pnpm --dir backend start` o seguir el inicio de Compose documentado arriba. El arranque usa `docker_laws_app`.
+
+Para practicar la actualización, `pnpm --dir backend test:postgres --limpiar` usa las dos instancias descartables del runner. La suite de migraciones aplica solo `001` mediante Umzug, inserta una consulta ficticia como aplicación y verifica que Express exige `002`. Después aplica `002` con la CLI, recupera por HTTP la consulta previa con su ID y contenido, y comprueba alta, duplicado y login sobre PostgreSQL. Repite el migrador y verifica que no quede nada pendiente. La otra suite conserva el escenario de instalación desde una base vacía.
+
+### Recuperación si falla la migración
+
+Guardar la salida segura, detener el arranque y consultar el estado antes de reintentar. Con el rol migrador en el destino autorizado, usar consultas de solo lectura para contrastar los objetos con `app."SequelizeMeta"`. La CLI `db:status` es local y puede inicializar el historial técnico.
+
+```sql
+SELECT to_regclass('app.usuarios') AS usuarios,
+       to_regclass('app.usuarios_id_seq') AS secuencia;
+-- Consultar solo si se verificó la existencia del historial.
+SELECT name FROM app."SequelizeMeta" ORDER BY name;
+```
+
+| Estado constatado | Acción |
+| --- | --- |
+| `002` ausente del historial y sin objetos nuevos | Si el DDL se revirtió, corregir la causa y cotejar que las consultas y `001` siguen intactas. Reintentar con un solo migrador en el destino autorizado. |
+| `002` ausente del historial y con tabla, secuencia o restricciones existentes | Posible interrupción después del commit del DDL y antes del registro en Umzug. Suspender reintentos. Un nuevo `up` puede fallar al agregar otra vez `usuarios_tipo_check`. Cotejar estructura, propietarios, permisos, datos e historial con el respaldo y acordar una recuperación específica antes de escribir. |
+| `002` registrada y objetos completos | La repetición normal de `up` debe indicar que no hay pendientes. Si Express falla, revisar configuración y permisos del rol de aplicación. |
+| `002` registrada y objetos incompletos o distintos | Detener el arranque y acordar reparación o restauración verificada. El historial por sí solo no acredita convergencia del esquema. |
+
+La CLI no ofrece `down`. Conservar ambos archivos de migración y revisar cualquier reparación del historial o restauración antes de ejecutarla. La validación de este ensayo corresponde al PostgreSQL local descartable. Supabase requiere su propio procedimiento, autorización en el momento y las comprobaciones de [seguridad y despliegue](../../docs/PLAN-SEGURIDAD-DESPLIEGUE.md#actualización-de-supabase-y-recuperación).
 
 ## Verificación reproducible
 
@@ -120,6 +173,8 @@ Las rutas relativas se resuelven desde la raíz del repositorio. No se incorpora
 Sequelize recibe `dialectOptions.ssl` con la CA leída, `rejectUnauthorized: true` y `servername` igual al host validado. La CA debe contener certificados PEM de autoridad vigentes. Node/pg verifican la cadena y el nombre del servidor; no se reemplaza `checkServerIdentity`. `NODE_TLS_REJECT_UNAUTHORIZED=0` se rechaza en el perfil remoto. Una CA ausente, inválida o incompatible debe corregirse: nunca se recurre a `rejectUnauthorized: false`. En local se fija `ssl: false`, sin heredar opciones ambientales.
 
 Se mantiene el pool existente de **máximo dos conexiones por proceso**, sin mínimo precalentado ni ajuste nuevo. El migrador tiene su propia instancia y la cierra al terminar. Dos procesos de aplicación podrían consumir cuatro conexiones; revisar capacidad antes de multiplicarlos. Solo debe ejecutarse un migrador a la vez.
+
+En Render el servicio web requiere el perfil explícito `supabase-dev`. Configurar `app.txt` y la CA mediante archivos privados de la plataforma. El rol migrador y su clave permanecen en el entorno del operador. Ver [configuración del servicio y verificación pendiente](../../docs/PLAN-SEGURIDAD-DESPLIEGUE.md#render).
 
 ### Procedimiento para un proyecto Supabase autorizado
 
@@ -182,6 +237,6 @@ Ninguna prueba sintética o handshake en loopback acredita Supabase. La evidenci
 
 **Criterios de cierre:** contrato asíncrono y rutas/JSON existentes, búsqueda por ID, idempotencia de migración, concurrencia, validaciones, fallos seguros y recuperación controlada se acreditaron mediante la regresión local. La primera migración remota, roles/TLS y flujo real con persistencia se acreditan mediante la evidencia de Homero. No se afirma que las suites locales se hayan ejecutado contra Supabase, que haya habido una segunda migración remota ni que se hayan realizado pruebas destructivas remotas. Con ambos hitos cubiertos, **P04 está técnicamente completada**. P01 y P02 también están completadas y aprobadas por su auditoría independiente, registrada en planificación; ese cierre documental no añade resultados a la validación Supabase.
 
-**Límites operativos:** la base remota es operativa para el prototipo de desarrollo; la aplicación no está desplegada públicamente. Continúan pendientes autenticación y autorización de usuarios, reglas de acceso a consultas y decisiones de despliegue, Caddy y HTTPS de la aplicación. El TLS verificado hacia PostgreSQL no acredita HTTPS del sitio. Se mantienen datos ficticios, credenciales en archivos privados excluidos de Git, ejecución explícita de migraciones con confirmación del proyecto y prohibición de dirigir los inicializadores, suites y limpiezas locales hacia Supabase. No se publican secretos ni se autoriza uso productivo por este cierre.
+**Límites operativos:** P04.4b acreditó el uso de la base remota desde el prototipo local. Las cuentas y el acceso a consultas de INC-04 tienen su propia verificación con PostgreSQL local. La publicación y HTTPS de la aplicación dependen del [plan de seguridad y despliegue](../../docs/PLAN-SEGURIDAD-DESPLIEGUE.md). Se mantienen datos ficticios, credenciales en archivos privados excluidos de Git y migraciones explícitas con confirmación del proyecto. Los inicializadores, suites y limpiezas se ejecutan únicamente sobre los destinos locales previstos.
 
 Fuentes oficiales consultadas: [modos de conexión Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres), [verificación TLS](https://supabase.com/docs/guides/platform/ssl-enforcement), [configuración SSL de pg y advertencia sobre URLs](https://node-postgres.com/features/ssl) y [seguridad de la Data API](https://supabase.com/docs/guides/api/securing-your-api).
