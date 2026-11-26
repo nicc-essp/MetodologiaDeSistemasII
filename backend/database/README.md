@@ -69,7 +69,21 @@ Para ejecutar el stack completo, aplicar primero la migración desde el host y d
 
 4. El comando muestra el ID de la cuenta creada. Agregar solo ese ID a `AUTH_REPRESENTANTES_IDS` en el `.env` local, como entero positivo o en una lista separada por comas. Reiniciar el backend con esa configuración o recrear su servicio en Compose para que reciba la variable. Iniciar sesión y verificar el acceso a las consultas ficticias.
 
-El alta utiliza bcrypt y el permiso `INSERT` del rol de aplicación. Ante duplicados, sale con error y conserva la cuenta existente. La contraseña se lee del archivo y el comando entrega únicamente el ID de la cuenta en caso de éxito. La lista de habilitación pertenece a una base concreta: dejarla vacía al cambiar o recrear la base y volver a registrar los nuevos IDs por este procedimiento. El comando solo admite PostgreSQL local. El acceso completo cubre exclusivamente la demostración académica con datos ficticios; el uso productivo requiere permisos de acceso por registro.
+El alta utiliza bcrypt y el permiso `INSERT` del rol de aplicación. Ante duplicados, sale con error y conserva la cuenta existente. La contraseña se lee del archivo y el comando entrega únicamente el ID de la cuenta en caso de éxito. La lista de habilitación pertenece a una base concreta: dejarla vacía al cambiar o recrear la base y volver a registrar los nuevos IDs por este procedimiento. El acceso completo cubre exclusivamente la demostración académica con datos ficticios; el uso productivo requiere permisos de acceso por registro.
+
+### Alta en Supabase de desarrollo
+
+El proyecto Supabase de desarrollo que usa Render debe tener aplicada `002-crear-usuarios`. Preparar un perfil privado `secrets/supabase-dev/<REF>/conexion.env` con `POSTGRES_TARGET=supabase-dev`, `POSTGRES_CONNECTION_MODE` (`session` o `direct`), `SUPABASE_PROJECT_REF`, `POSTGRES_HOST`, `POSTGRES_PORT=5432`, `POSTGRES_DB=postgres`, `POSTGRES_SECRETS_DIR` y `POSTGRES_SSL_CA_FILE`. El directorio privado debe contener `app.txt` con la credencial de `docker_laws_app`. La CA debe corresponder al host elegido para validar el certificado y el nombre del servidor. [Variables y rutas del perfil](#variables-definitivas).
+
+Guardar `nombre`, `email` y `password` en `secrets/representante-supabase.json`. Desde `backend/`, usar una terminal sin variables PostgreSQL heredadas de otros entornos, ya que las variables del proceso tienen prioridad sobre el archivo.
+
+```powershell
+$referencia = 'REEMPLAZAR_POR_LA_REFERENCIA_AUTORIZADA'
+$archivoRepresentante = (Resolve-Path -LiteralPath '../secrets/representante-supabase.json').Path
+node "--env-file=../secrets/supabase-dev/$referencia/conexion.env" --import tsx scripts/crear-representante.ts $archivoRepresentante --supabase-project $referencia
+```
+
+El argumento `--supabase-project` debe coincidir con `SUPABASE_PROJECT_REF` antes de que el alta lea las credenciales o el JSON. Para habilitar la lectura, agregar el ID devuelto a `AUTH_REPRESENTANTES_IDS` del backend en Render, conservando los demás IDs autorizados de esa misma base. La habilitación es un paso separado del alta.
 
 ## Esquema, historial y permisos
 
@@ -161,7 +175,7 @@ Compose sigue siendo exclusivamente local: fija `POSTGRES_TARGET=local`, `POSTGR
 | `POSTGRES_DB` | `docker_laws_dev` predeterminado | Obligatoria: `postgres`. La referencia del proyecto no es el nombre de la base. |
 | `POSTGRES_SECRETS_DIR` | `./secrets/postgres` predeterminado | Directorio privado independiente, obligatorio; se recomienda `./secrets/supabase-dev/<REF>`. Se rechazan las rutas estándar locales. |
 | `POSTGRES_CONNECTION_MODE` (nueva) | No debe estar definida, ni vacía | Obligatoria: `direct` o `session`; determina host y usuario de transporte. |
-| `SUPABASE_PROJECT_REF` (nueva) | No debe estar definida | Referencia de veinte caracteres alfanuméricos en minúscula; vincula host directo, usuario agrupado y confirmación del migrador. No es una credencial. |
+| `SUPABASE_PROJECT_REF` (nueva) | No debe estar definida | Referencia de veinte caracteres alfanuméricos en minúscula; vincula host directo, usuario agrupado y confirmación del migrador y del alta privada. No es una credencial. |
 | `POSTGRES_SSL_CA_FILE` (nueva) | No debe estar definida | Ruta obligatoria a la CA PEM correspondiente al endpoint elegido. No se descarga automáticamente. |
 
 Las rutas relativas se resuelven desde la raíz del repositorio. No se incorporan variables de contraseña, usuario libre, URL, tamaño de pool ni un selector para reducir TLS. Se rechazan `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_SSL_MODE` y las variables alternativas `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGSSLMODE`, `PGSSLROOTCERT`, `PGSSLCERT`, `PGSSLKEY`, `PGSERVICE` y `PGSERVICEFILE`. Sus valores no se incluyen en los errores.

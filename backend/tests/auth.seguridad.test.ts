@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { request as requestHttp } from 'node:http';
+import type { RequestListener } from 'node:http';
 import { createServer, request } from 'node:https';
 import type { Request, Response } from 'express';
 import { createApp } from '../app';
+import { parsearProxiesConfiables } from '../config/app.config';
 import { crearAlmacenCuentas } from '../data/cuentas-guardadas';
 import { crearAlmacenFormularios } from '../data/formularios-guardados';
 import { limitarSolicitudes } from '../middleware/limite-solicitudes.middleware';
@@ -98,12 +101,12 @@ test('la política HTTPS protege cuentas y lecturas en HTTP sin confiar en encab
   });
 });
 
-test('la política HTTPS admite el alta local con TLS real y CA sintética verificada', async () => {
+async function enviarCuentaPorTls(listener: RequestListener, ruta: string, datos: unknown) {
   const fixture = new URL('./fixtures/tls-local/', import.meta.url);
   const cert = readFileSync(new URL('servidor.crt', fixture));
   const key = readFileSync(new URL('servidor.key', fixture));
   const ca = readFileSync(new URL('ca.crt', fixture));
-  const servidor = createServer({ cert, key }, createApp({ exigirHttpsCuentas: true }));
+  const servidor = createServer({ cert, key }, listener);
   try {
     await new Promise<void>((ok, error) => {
       servidor.once('error', error);
@@ -111,9 +114,9 @@ test('la política HTTPS admite el alta local con TLS real y CA sintética verif
     });
     const direccion = servidor.address();
     assert.ok(direccion && typeof direccion !== 'string');
-    const cuerpo = await new Promise<string>((ok, error) => {
+    return await new Promise<{ status?: number; cacheControl?: string; cuerpo: string }>((ok, error) => {
       const req = request({
-        host: '127.0.0.1', port: direccion.port, method: 'POST', path: '/auth/register',
+        host: '127.0.0.1', port: direccion.port, method: 'POST', path: ruta,
         servername: 'db.abcdefghijklmnopqrst.supabase.co', ca,
         headers: { 'Content-Type': 'application/json' },
       }, respuesta => {
@@ -121,22 +124,96 @@ test('la política HTTPS admite el alta local con TLS real y CA sintética verif
         respuesta.setEncoding('utf8');
         respuesta.on('data', chunk => { body += chunk; });
         respuesta.on('error', error);
-        respuesta.on('end', () => {
-          try {
-            assert.equal(respuesta.statusCode, 201);
-            assert.equal(respuesta.headers['cache-control'], 'no-store');
-            ok(body);
-          } catch (causa) { error(causa); }
-        });
+        respuesta.on('end', () => ok({
+          status: respuesta.statusCode,
+          cacheControl: respuesta.headers['cache-control'],
+          cuerpo: body,
+        }));
       });
       req.on('error', error);
       req.setTimeout(5000, () => req.destroy(new Error('Solicitud TLS local vencida')));
-      req.end(JSON.stringify(datosCliente));
+      req.end(JSON.stringify(datos));
     });
-    assert.deepEqual(JSON.parse(cuerpo), { id: 1, nombre: datosCliente.nombre, email: datosCliente.email, tipo: 'cliente' });
   } finally {
     if (servidor.listening) await new Promise<void>(ok => servidor.close(() => ok()));
   }
+}
+
+test('la política HTTPS admite el alta local con TLS real y CA sintética verificada', async () => {
+  const app = createApp({ exigirHttpsCuentas: true });
+  const { status, cacheControl, cuerpo } = await enviarCuentaPorTls(app, '/auth/register', datosCliente);
+  assert.equal(status, 201);
+  assert.equal(cacheControl, 'no-store');
+  assert.deepEqual(JSON.parse(cuerpo), { id: 1, nombre: datosCliente.nombre, email: datosCliente.email, tipo: 'cliente' });
+});
+
+for (const [modo, opciones] of [
+  ['CIDR explícito', { proxiesConfiables: parsearProxiesConfiables('127.0.0.1/32') }],
+  ['un salto en Render', { enRender: true }],
+] as const) {
+  test(`el login HTTPS funciona detrás de un proxy TLS con ${modo}`, async () => {
+    const app = createApp({ ...representanteEnMemoria(), ...opciones, exigirHttpsCuentas: true });
+    await withHttp(app, async base => {
+      const { status, cacheControl, cuerpo } = await enviarCuentaPorTls((entrada, salida) => {
+        const reenviada = requestHttp(base + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
+          signal: AbortSignal.timeout(5000),
+        }, respuesta => {
+          salida.writeHead(respuesta.statusCode ?? 502, respuesta.headers);
+          respuesta.pipe(salida);
+        });
+        reenviada.on('error', () => salida.destroy());
+        entrada.pipe(reenviada);
+      }, '/auth/login', datosRepresentanteFicticio);
+      assert.equal(status, 200);
+      assert.equal(cacheControl, 'no-store');
+      assert.equal(typeof JSON.parse(cuerpo).token, 'string');
+    });
+  });
+}
+
+test('el modo Render rechaza HTTP directo y un protocolo reenviado inseguro o ambiguo', async () => {
+  await withHttp(createApp({ enRender: true, exigirHttpsCuentas: true }), async base => {
+    for (const protocolo of [undefined, 'http', 'https, http', 'http, https']) {
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      if (protocolo !== undefined) headers.set('X-Forwarded-Proto', protocolo);
+      const respuesta = await fetch(base + '/auth/login', {
+        method: 'POST', headers, body: '{}', signal: AbortSignal.timeout(5000),
+      });
+      assert.equal(respuesta.status, 403);
+      assert.deepEqual(await respuesta.json(), { message: 'Esta operación requiere HTTPS' });
+    }
+  });
+});
+
+test('la lista explícita tiene prioridad en Render y rechaza encabezados de un origen no autorizado', async t => {
+  const representante = representanteEnMemoria();
+  const buscarPorEmail = t.mock.fn(representante.cuentas.buscarPorEmail);
+  const app = createApp({
+    ...representante,
+    cuentas: { ...representante.cuentas, buscarPorEmail },
+    proxiesConfiables: parsearProxiesConfiables('192.0.2.10/32'),
+    enRender: true,
+    exigirHttpsCuentas: true,
+  });
+  await withHttp(app, async base => {
+    const respuesta = await fetch(base + '/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Forwarded-Proto': 'https',
+        'X-Forwarded-For': '198.51.100.24, 192.0.2.10',
+        Forwarded: 'for=192.0.2.10;proto=https',
+      },
+      body: JSON.stringify(datosRepresentanteFicticio),
+      signal: AbortSignal.timeout(5000),
+    });
+    assert.equal(respuesta.status, 403);
+    assert.equal(respuesta.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await respuesta.json(), { message: 'Esta operación requiere HTTPS' });
+    assert.equal(buscarPorEmail.mock.callCount(), 0);
+  });
 });
 
 test('HTTPS reenviado solo se admite desde un proxy configurado y con un protocolo inequívoco', async () => {
