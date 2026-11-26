@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { leerConfiguracionPostgres } from '../config/database.config';
 import { crearConexionPostgres } from '../database/connection';
 import { ErrorCuenta } from '../data/cuentas-guardadas';
@@ -6,23 +8,35 @@ import { prepararAlmacenCuentasPostgres } from '../data/cuentas-postgres';
 import { crearCuenta } from '../services/auth.service';
 import { validarRegistro } from '../validations/auth.validation';
 
-async function main() {
-  const [archivo] = process.argv.slice(2);
-  if (!archivo || process.argv.length !== 3) {
-    console.error('Indicá únicamente la ruta de un archivo JSON privado con nombre, email y password.');
-    process.exitCode = 1;
-    return;
+class ErrorUsoAltaRepresentante extends Error {}
+
+export function leerConfiguracionAltaRepresentante(
+  args: readonly string[], env: NodeJS.ProcessEnv = process.env,
+) {
+  const [archivo, opcion, referencia] = args;
+  const destino = env.POSTGRES_TARGET ?? 'local';
+  if (!archivo || archivo.startsWith('--') || (destino === 'local' && args.length !== 1)) {
+    throw new ErrorUsoAltaRepresentante('Indicá únicamente la ruta de un archivo JSON privado con nombre, email y password.');
+  }
+  if (destino !== 'local' && destino !== 'supabase-dev') {
+    throw new ErrorUsoAltaRepresentante('El alta solo admite los destinos PostgreSQL local y supabase-dev.');
+  }
+  if (destino === 'supabase-dev' &&
+    (args.length !== 3 || opcion !== '--supabase-project' || !referencia || referencia !== env.SUPABASE_PROJECT_REF)) {
+    throw new ErrorUsoAltaRepresentante('Supabase requiere --supabase-project REF coincidente con SUPABASE_PROJECT_REF.');
   }
 
-  let etapa = 'validar el destino PostgreSQL local';
+  const config = leerConfiguracionPostgres('aplicacion', env);
+  if (config.destino === 'local' && !['127.0.0.1', '::1'].includes(config.host)) {
+    throw new ErrorUsoAltaRepresentante('El alta local requiere una dirección de loopback literal (127.0.0.1 o ::1).');
+  }
+  return { archivo, config };
+}
+
+async function main() {
+  let etapa = 'validar la configuración PostgreSQL';
   try {
-    if ((process.env.POSTGRES_TARGET ?? 'local') !== 'local') {
-      throw new Error();
-    }
-    const config = leerConfiguracionPostgres('aplicacion');
-    if (!['127.0.0.1', '::1'].includes(config.host)) {
-      throw new Error();
-    }
+    const { archivo, config } = leerConfiguracionAltaRepresentante(process.argv.slice(2));
 
     etapa = 'leer el JSON privado de la cuenta';
     const entrada: unknown = JSON.parse(await readFile(archivo, 'utf8'));
@@ -43,11 +57,15 @@ async function main() {
     }
     console.log(id);
   } catch (error) {
-    console.error(error instanceof ErrorCuenta && error.status === 409
-      ? 'Ya existe una cuenta con ese correo. El alta se canceló.'
-      : `No se pudo preparar el representante al ${etapa}.`);
+    if (error instanceof ErrorUsoAltaRepresentante) {
+      console.error(error.message);
+    } else if (error instanceof ErrorCuenta && error.status === 409) {
+      console.error('Ya existe una cuenta con ese correo. El alta se canceló.');
+    } else {
+      console.error(`No se pudo preparar el representante al ${etapa}.`);
+    }
     process.exitCode = 1;
   }
 }
 
-void main();
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) void main();

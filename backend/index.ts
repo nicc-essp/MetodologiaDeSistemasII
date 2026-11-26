@@ -39,7 +39,7 @@ export async function iniciarServidor({ env = process.env, puerto, host = '0.0.0
     etapa = 'comprobar el esquema y los permisos de cuentas (ejecutá db:migrate explícitamente)';
     const cuentas = await prepararAlmacenCuentasPostgres(conexion);
     const servidor = createServer(createApp({
-      almacen, cuentas, allowedOrigins, representantesHabilitados, proxiesConfiables,
+      almacen, cuentas, allowedOrigins, representantesHabilitados, proxiesConfiables, enRender,
       exigirHttpsCuentas: enRender || env.NODE_ENV === 'production',
     }));
     etapa = 'abrir el puerto HTTP';
