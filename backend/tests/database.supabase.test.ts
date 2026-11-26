@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { leerConfiguracionPostgres } from '../config/database.config';
 import { crearConexionPostgres } from '../database/connection';
 import { leerConfiguracionMigracion } from '../database/migrate';
+import { leerConfiguracionAltaRepresentante } from '../scripts/crear-representante';
 import { comprobarDestinoDescartable } from './helpers/postgres';
 
 const proyecto = 'abcdefghijklmnopqrst';
@@ -181,6 +182,59 @@ test('migraciones remotas exigen up y confirmación coincidente; status nunca in
     const local = { POSTGRES_TARGET: 'local', POSTGRES_SECRETS_DIR: env.POSTGRES_SECRETS_DIR };
     for (const comando of ['up', 'status']) assert.equal(leerConfiguracionMigracion([comando], local).config.destino, 'local');
     assert.throws(() => leerConfiguracionMigracion(['up', '--supabase-project', proyecto], local));
+  });
+});
+
+test('alta privada local conserva el rol de aplicación y exige loopback literal', async () => {
+  await conPerfil(({ POSTGRES_SECRETS_DIR }) => {
+    const archivo = 'representante-ficticio.json';
+    const local = { POSTGRES_SECRETS_DIR };
+    const ipv4 = leerConfiguracionAltaRepresentante([archivo], local);
+    assert.equal(ipv4.archivo, archivo);
+    assert.equal(ipv4.config.destino, 'local');
+    assert.equal(ipv4.config.host, '127.0.0.1');
+    assert.equal(ipv4.config.username, 'docker_laws_app');
+    const ipv6 = leerConfiguracionAltaRepresentante([archivo], { ...local, POSTGRES_TARGET: 'local', POSTGRES_HOST: '::1' });
+    assert.equal(ipv6.config.host, '::1');
+    for (const host of ['localhost', 'postgres']) {
+      assert.throws(() => leerConfiguracionAltaRepresentante([archivo], { ...local, POSTGRES_HOST: host }), /loopback literal/);
+    }
+    assert.throws(() => leerConfiguracionAltaRepresentante([archivo, '--supabase-project', proyecto], local), /únicamente la ruta/);
+  });
+});
+
+test('alta privada rechaza un destino desconocido y exige una confirmación remota exacta', () => {
+  const archivo = 'representante-ficticio.json';
+  const env = { POSTGRES_TARGET: 'supabase-dev', SUPABASE_PROJECT_REF: proyecto };
+  for (const destino of ['', 'production']) {
+    assert.throws(() => leerConfiguracionAltaRepresentante([archivo, '--supabase-project', proyecto],
+      { ...env, POSTGRES_TARGET: destino }), /solo admite los destinos PostgreSQL local y supabase-dev/);
+  }
+  for (const args of [[archivo], [archivo, '--supabase-project'], [archivo, '--supabase-project', ''],
+    [archivo, '--supabase-project', 'z'.repeat(20)], [archivo, '--password', 'argumento-sintetico'],
+    [archivo, '--supabase-project', proyecto, 'argumento-sintetico']]) {
+    assert.throws(() => leerConfiguracionAltaRepresentante(args, env), /Supabase requiere --supabase-project REF/);
+  }
+  assert.throws(() => leerConfiguracionAltaRepresentante([archivo, '--supabase-project', proyecto],
+    { POSTGRES_TARGET: 'supabase-dev' }), /Supabase requiere --supabase-project REF/);
+});
+
+test('alta privada con confirmación reutiliza el rol de aplicación y TLS verificado en ambos modos Supabase', async () => {
+  await conPerfil(env => {
+    const archivo = 'representante-ficticio.json';
+    const args = [archivo, '--supabase-project', proyecto];
+    const pooler = 'aws-1-us-east-1.pooler.supabase.com';
+    const perfiles = [env, { ...env, POSTGRES_CONNECTION_MODE: 'session', POSTGRES_HOST: pooler }];
+    for (const perfil of perfiles) {
+      const lectura = leerConfiguracionAltaRepresentante(args, perfil);
+      const usuario = perfil.POSTGRES_CONNECTION_MODE === 'session' ? `docker_laws_app.${proyecto}` : 'docker_laws_app';
+      assert.equal(lectura.archivo, archivo);
+      assert.equal(lectura.config.destino, 'supabase-dev');
+      assert.equal(lectura.config.username, usuario);
+      assert.deepEqual(lectura.config.ssl, { ca, rejectUnauthorized: true, servername: perfil.POSTGRES_HOST });
+    }
+    assert.throws(() => leerConfiguracionAltaRepresentante(args, { ...env, NODE_TLS_REJECT_UNAUTHORIZED: '0' }),
+      /No se permite desactivar la verificación TLS/);
   });
 });
 

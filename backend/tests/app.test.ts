@@ -135,15 +135,17 @@ test('una lista de proxies inválida falla antes de consultar el destino Postgre
   assert.equal(leyóDestino, false);
 });
 
-test('el comando privado rechaza destinos Supabase antes de leer el archivo de cuenta', () => {
-  const resultado = spawnSync(process.execPath, [
-    '--import', 'tsx', 'scripts/crear-representante.ts', 'ruta-sintetica-inexistente.json',
-  ], {
-    cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', timeout: 10000,
-    env: { ...process.env, POSTGRES_TARGET: 'supabase-dev', SUPABASE_PROJECT_REF: 'referencia-ficticia' },
-  });
-  assert.ifError(resultado.error);
-  assert.equal(resultado.status, 1);
-  assert.equal(resultado.stdout, '');
-  assert.equal(resultado.stderr.trim(), 'No se pudo preparar el representante al validar el destino PostgreSQL local.');
+test('el comando privado rechaza Supabase sin confirmación coincidente antes de leer el JSON', () => {
+  for (const confirmacion of [[], ['--supabase-project', 'z'.repeat(20)]]) {
+    const resultado = spawnSync(process.execPath, [
+      '--import', 'tsx', 'scripts/crear-representante.ts', 'ruta-sintetica-inexistente.json', ...confirmacion,
+    ], {
+      cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', timeout: 10000,
+      env: { ...process.env, POSTGRES_TARGET: 'supabase-dev', SUPABASE_PROJECT_REF: 'abcdefghijklmnopqrst' },
+    });
+    assert.ifError(resultado.error);
+    assert.equal(resultado.status, 1);
+    assert.equal(resultado.stdout, '');
+    assert.equal(resultado.stderr.trim(), 'Supabase requiere --supabase-project REF coincidente con SUPABASE_PROJECT_REF.');
+  }
 });
