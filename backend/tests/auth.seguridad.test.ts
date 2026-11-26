@@ -147,38 +147,54 @@ test('la política HTTPS admite el alta local con TLS real y CA sintética verif
   assert.deepEqual(JSON.parse(cuerpo), { id: 1, nombre: datosCliente.nombre, email: datosCliente.email, tipo: 'cliente' });
 });
 
-test('el login HTTPS funciona cuando un proxy autorizado termina TLS y reenvía por HTTP', async () => {
-  const app = createApp({
-    ...representanteEnMemoria(),
-    proxiesConfiables: parsearProxiesConfiables('127.0.0.1/32'),
-    exigirHttpsCuentas: true,
+for (const [modo, opciones] of [
+  ['CIDR explícito', { proxiesConfiables: parsearProxiesConfiables('127.0.0.1/32') }],
+  ['un salto en Render', { enRender: true }],
+] as const) {
+  test(`el login HTTPS funciona detrás de un proxy TLS con ${modo}`, async () => {
+    const app = createApp({ ...representanteEnMemoria(), ...opciones, exigirHttpsCuentas: true });
+    await withHttp(app, async base => {
+      const { status, cacheControl, cuerpo } = await enviarCuentaPorTls((entrada, salida) => {
+        const reenviada = requestHttp(base + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
+          signal: AbortSignal.timeout(5000),
+        }, respuesta => {
+          salida.writeHead(respuesta.statusCode ?? 502, respuesta.headers);
+          respuesta.pipe(salida);
+        });
+        reenviada.on('error', () => salida.destroy());
+        entrada.pipe(reenviada);
+      }, '/auth/login', datosRepresentanteFicticio);
+      assert.equal(status, 200);
+      assert.equal(cacheControl, 'no-store');
+      assert.equal(typeof JSON.parse(cuerpo).token, 'string');
+    });
   });
-  await withHttp(app, async base => {
-    const { status, cacheControl, cuerpo } = await enviarCuentaPorTls((entrada, salida) => {
-      const reenviada = requestHttp(base + '/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
-        signal: AbortSignal.timeout(5000),
-      }, respuesta => {
-        salida.writeHead(respuesta.statusCode ?? 502, respuesta.headers);
-        respuesta.pipe(salida);
+}
+
+test('el modo Render rechaza HTTP directo y un protocolo reenviado inseguro o ambiguo', async () => {
+  await withHttp(createApp({ enRender: true, exigirHttpsCuentas: true }), async base => {
+    for (const protocolo of [undefined, 'http', 'https, http', 'http, https']) {
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      if (protocolo !== undefined) headers.set('X-Forwarded-Proto', protocolo);
+      const respuesta = await fetch(base + '/auth/login', {
+        method: 'POST', headers, body: '{}', signal: AbortSignal.timeout(5000),
       });
-      reenviada.on('error', () => salida.destroy());
-      entrada.pipe(reenviada);
-    }, '/auth/login', datosRepresentanteFicticio);
-    assert.equal(status, 200);
-    assert.equal(cacheControl, 'no-store');
-    assert.equal(typeof JSON.parse(cuerpo).token, 'string');
+      assert.equal(respuesta.status, 403);
+      assert.deepEqual(await respuesta.json(), { message: 'Esta operación requiere HTTPS' });
+    }
   });
 });
 
-test('HTTP directo se rechaza aunque los encabezados indiquen HTTPS y un proxy autorizado', async t => {
+test('la lista explícita tiene prioridad en Render y rechaza encabezados de un origen no autorizado', async t => {
   const representante = representanteEnMemoria();
   const buscarPorEmail = t.mock.fn(representante.cuentas.buscarPorEmail);
   const app = createApp({
     ...representante,
     cuentas: { ...representante.cuentas, buscarPorEmail },
     proxiesConfiables: parsearProxiesConfiables('192.0.2.10/32'),
+    enRender: true,
     exigirHttpsCuentas: true,
   });
   await withHttp(app, async base => {

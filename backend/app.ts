@@ -20,6 +20,7 @@ export function createApp({
   representantesHabilitados = new Set<number>(),
   exigirHttpsCuentas = false,
   proxiesConfiables = [],
+  enRender = false,
 }: {
   almacen?: AlmacenFormularios;
   cuentas?: AlmacenCuentas;
@@ -27,9 +28,14 @@ export function createApp({
   representantesHabilitados?: ReadonlySet<number>;
   exigirHttpsCuentas?: boolean;
   proxiesConfiables?: string[];
+  enRender?: boolean;
 } = {}) {
   const app = express();
-  if (proxiesConfiables.length) app.set('trust proxy', proxiesConfiables);
+  if (proxiesConfiables.length) {
+    app.set('trust proxy', proxiesConfiables);
+  } else if (enRender) {
+    app.set('trust proxy', 1);
+  }
   const servicioAuth = crearServicioAuth(cuentas, representantesHabilitados);
   const protegerCuenta = protegerTransporteCuenta(exigirHttpsCuentas);
   app.use(cors({ origin: allowedOrigins }));

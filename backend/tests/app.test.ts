@@ -27,6 +27,16 @@ test('preparar app no escucha y el helper integra Express/health', async () => {
   });
 });
 
+test('Render usa un salto con la lista vacía y conserva los proxies explícitos', () => {
+  assert.equal(createApp().get('trust proxy'), false);
+  assert.equal(createApp({ enRender: true }).get('trust proxy'), 1);
+  const proxiesConfiables = ['192.0.2.10/32'];
+  for (const enRender of [false, true]) {
+    const app = createApp({ enRender, proxiesConfiables });
+    assert.deepEqual(app.get('trust proxy'), proxiesConfiables);
+  }
+});
+
 test('dos apps y una reconstruida tienen datos independientes', async () => {
   await withHttp(createApp(representanteEnMemoria()), async primera => {
     const primeraSesion = await autenticarRepresentante(primera);
@@ -133,6 +143,16 @@ test('una lista de proxies inválida falla antes de consultar el destino Postgre
     message: 'No se pudo iniciar el backend al validar TRUST_PROXY_CIDRS. No se habilitó almacenamiento en memoria.',
   });
   assert.equal(leyóDestino, false);
+});
+
+test('Render rechaza una lista explícita inválida antes de preparar PostgreSQL', async () => {
+  const env = {
+    RENDER: 'true',
+    POSTGRES_TARGET: 'supabase-dev',
+    CORS_ORIGINS: 'https://app.ejemplo.invalid',
+    TRUST_PROXY_CIDRS: '1',
+  };
+  await assert.rejects(iniciarServidor({ env }), /validar TRUST_PROXY_CIDRS/);
 });
 
 test('el comando privado rechaza Supabase sin confirmación coincidente antes de leer el JSON', () => {
