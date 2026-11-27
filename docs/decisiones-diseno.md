@@ -38,31 +38,31 @@ La revisión manual del prototipo de consultas fue confirmada por el usuario con
 
 ## 6. Configuración pública y exclusiones Docker
 
-`VITE_API_BASE_URL` permite compartir el bundle con distintos destinos públicos al reconstruirlo. `CORS_ORIGINS` delimita desde qué orígenes puede leerse la API en navegador. Las credenciales PostgreSQL se resuelven solo en el backend y la autorización de lecturas se comprueba en el servidor. Este diseño permite separar la configuración visible del navegador de la conexión a datos. [Resolución de la API](../frontend/src/config/apiConfig.js) · [Configuración CORS](../backend/config/app.config.ts) · [Configuración PostgreSQL](../backend/config/database.config.ts).
+`VITE_API_BASE_URL` fija la dirección pública de la API al construir el frontend. Cambiar ese destino requiere reconstruir el bundle. `CORS_ORIGINS` delimita desde qué orígenes puede leerse la API en navegador. Las credenciales PostgreSQL se resuelven solo en el backend y la autorización de lecturas se comprueba en el servidor. Este diseño permite separar la configuración visible del navegador de la conexión a datos. [Resolución de la API](../frontend/src/config/apiConfig.js) · [Configuración CORS](../backend/config/app.config.ts) · [Configuración PostgreSQL](../backend/config/database.config.ts).
 
 Ambos `.dockerignore` excluyen patrones de archivos de entorno, credenciales y claves en raíz y subdirectorios. El verificador usa marcadores ficticios y archivos públicos de control, e inspecciona contextos, configuraciones y capas. Una capa anterior puede conservar un archivo aunque se borre en otra posterior. La cobertura se limita a categorías y formatos ensayados. [Exclusiones backend](../backend/.dockerignore) · [Exclusiones frontend](../frontend/.dockerignore) · [Prueba de fuga en una capa](../scripts/verificar-docker.test.mjs#L243).
 
 Las verificaciones TLS locales usan [material sintético documentado junto a los fixtures](../backend/tests/fixtures/tls-local/README.md), independiente de los certificados y credenciales de Supabase. [Prueba de CA y nombre del servidor](../backend/tests/database.supabase.test.ts#L143).
 
-## 7. Decisiones aprobadas para el primer incremento de persistencia
+## 7. Persistencia y modelo de datos
 
 ### D01 — Alcance de la persistencia
 
-El formulario conserva sus campos y rutas. PostgreSQL conserva las consultas entre reinicios y las migraciones preparan el esquema sin cargar filas ficticias. La misma API utiliza adaptadores de datos aislados en las pruebas y PostgreSQL en el arranque habitual. La consulta inicial registra la solicitud de asesoramiento. El contrato actual cubre envío y lectura de consultas. [API de consultas](../backend/routes/formulario.routes.ts) · [Prueba de persistencia](../backend/tests/formulario.postgres.test.ts#L216).
+PostgreSQL conserva consultas y cuentas entre reinicios del backend. Las migraciones crean las tablas de negocio sin cargar datos de ejemplo. La API utiliza adaptadores de datos aislados en las pruebas y PostgreSQL en el arranque habitual. El contrato de consultas mantiene sus siete campos y cubre envío, listado y detalle. [API de consultas](../backend/routes/formulario.routes.ts) · [Prueba de persistencia de consultas](../backend/tests/formulario.postgres.test.ts#L216) · [Prueba de persistencia de cuentas](../backend/tests/database.integration.test.ts#L174).
 
 ### D02 — Modelo y comportamiento
 
-| Campo | Definición en `app.consultas` |
-| --- | --- |
-| `id` | `INTEGER`, clave primaria generada por PostgreSQL mediante secuencia. Puede haber huecos. |
-| `nombre`, `apellido`, `dni`, `telefono`, `email`, `asunto`, `mensaje` | `TEXT NOT NULL` por columna, sin unicidad de contacto ni dependencia de una cuenta. |
+| Tabla | Responsabilidad | Campos y restricciones |
+| --- | --- | --- |
+| `app.consultas` | Guarda el contacto declarado y la solicitud de asesoramiento. | `id` como clave primaria. `nombre`, `apellido`, `dni`, `telefono`, `email`, `asunto` y `mensaje` son `TEXT NOT NULL`. Los datos de contacto pueden repetirse. |
+| `app.usuarios` | Guarda la identidad de la cuenta, su tipo y el hash para autenticarla. | `id` como clave primaria. `nombre`, `email`, `tipo` y `password_hash` son `TEXT NOT NULL`. `email` es único. `usuarios_tipo_check` admite `cliente` o `representante`. |
 
-Cada fila conserva el contacto declarado al enviar la consulta. Bajo esta semántica, la dependencia funcional relevante es `id → los siete campos`. Cada columna guarda un valor de su dominio, la clave es simple y el esquema carece de dependencias transitivas declaradas entre atributos no clave. No se asume que un DNI o correo determine el contacto vigente de la persona. Así se conserva la evaluación en tercera forma normal para el contrato acordado. [Modelo](../backend/models/consulta.model.ts) · [Migración de consultas](../backend/migrations/001-crear-consultas.ts).
+Cada `id` es `INTEGER NOT NULL` y PostgreSQL lo genera con la secuencia propia de la tabla, que puede dejar huecos. Los modelos desactivan `timestamps` y las tablas son independientes, sin claves foráneas entre ellas. Esto permite guardar el contacto de cada envío aun cuando la persona carezca de cuenta. [Modelo de consultas](../backend/models/consulta.model.ts) · [Migración de consultas](../backend/migrations/001-crear-consultas.ts) · [Modelo de usuarios](../backend/models/usuario.model.ts) · [Migración de usuarios](../backend/migrations/002-crear-usuarios.ts).
 
 ```mermaid
 erDiagram
-    CONSULTA {
-        int id PK
+    CONSULTA["app.consultas"] {
+        integer id PK
         text nombre
         text apellido
         text dni
@@ -71,9 +71,16 @@ erDiagram
         text asunto
         text mensaje
     }
+    USUARIO["app.usuarios"] {
+        integer id PK
+        text nombre
+        text email UK
+        text tipo
+        text password_hash
+    }
 ```
 
-El DER representa los datos de la consulta. `app.usuarios` tiene su propia clave primaria, su restricción de correo único, los tipos de cuenta permitidos y el hash. Las dos tablas son independientes. El diseño de expedientes, mensajes y sus relaciones queda fuera del modelo aprobado para la aplicación actual. [Migración de usuarios](../backend/migrations/002-crear-usuarios.ts).
+En `app.consultas`, la dependencia funcional relevante es `id → los siete campos`. Cada columna guarda un valor de su dominio, la clave es simple y el esquema carece de dependencias transitivas declaradas entre atributos no clave. Esa semántica mantiene el modelo de consultas en tercera forma normal.
 
 Las entradas con NUL o Unicode mal formado reciben `400` antes de insertar, conservando el texto válido. La decisión protege la compatibilidad con PostgreSQL y mantiene los siete campos de la API. [Validación](../backend/validations/formulario.validation.ts) · [Regresión PostgreSQL](../backend/tests/formulario.postgres.test.ts#L195).
 
@@ -81,7 +88,7 @@ Las entradas con NUL o Unicode mal formado reciben `400` antes de insertar, cons
 
 Sequelize 6 con `pg` permite mantener modelos y adaptadores comunes para PostgreSQL local y Supabase. Umzug registra los cambios de esquema en `app."SequelizeMeta"`, reservado al migrador. Las versiones fijadas están en los manifiestos y lockfiles. Las tablas de negocio usan `INTEGER` y `TEXT` y se verifican sin `pg-hstore`. [Dependencias](../backend/package.json) · [Runner](../backend/database/migrate.ts) · [Prueba de roles y esquema](../backend/tests/database.integration.test.ts).
 
-La propiedad del esquema y los cambios DDL pertenecen al migrador. La aplicación recibe lectura, inserción y uso de secuencias según el esquema. Esto reduce el alcance de la credencial usada por Express. Las migraciones versionadas conservan el estado previo y evitan sincronización destructiva en el arranque. El costo operativo es preparar el esquema explícitamente y comprobar su compatibilidad antes de desplegar. [Roles y procedimiento](../README.md#roles-y-permisos-de-postgresql).
+La propiedad del esquema y los cambios DDL pertenecen al migrador. La aplicación recibe `SELECT` e `INSERT` sobre ambas tablas y `USAGE` sobre el esquema y sus secuencias. Esto reduce el alcance de la credencial usada por Express. El operador aplica las migraciones de forma explícita y Express comprueba el esquema y los permisos al iniciar. El costo operativo es preparar y verificar el esquema antes de desplegar. [Roles y procedimiento](../README.md#roles-y-permisos-de-postgresql) · [Arranque](../backend/index.ts).
 
 ### D04 — Entornos y TLS PostgreSQL
 
@@ -95,7 +102,7 @@ El equipo verificó la conexión y la persistencia en su proyecto de desarrollo 
 
 La demostración usa tokens opacos con vencimiento de ocho horas. Las sesiones viven en memoria y se revocan con logout. Los cupos de tres sesiones por cuenta y 256 por proceso acotan el estado. El recorrido está diseñado para una sola instancia. Una instancia diferente o un reinicio exige volver a iniciar sesión. En el navegador, `sessionStorage` permite recuperar el perfil en la pestaña y borrar el token al cerrar sesión. [Servicio de sesiones](../backend/services/auth.service.ts) · [Cliente de cuentas](../frontend/src/services/authService.js) · [Pruebas de cupos](../backend/tests/auth.seguridad.test.ts).
 
-**D06 · Acceso a consultas.** El envío es público. Lectura por listado o detalle requiere una sesión vigente, tipo `representante` e ID positivo autorizado de esa base en `AUTH_REPRESENTANTES_IDS`. Una lista ausente o vacía concede cero permisos y una entrada inválida impide el arranque. El registro público crea clientes y el alta privada de representantes queda separada de su habilitación. Una coincidencia con el correo de la consulta no concede acceso. [Autorización](../backend/middleware/sesion.middleware.ts) · [Configuración de IDs](../backend/config/app.config.ts) · [Alta privada](../README.md#alta-privada-de-un-representante-ficticio).
+**D06 · Acceso a consultas.** El envío es público. La lectura por listado o detalle requiere una sesión vigente, tipo `representante` e ID positivo autorizado de esa base en `AUTH_REPRESENTANTES_IDS`. Una lista ausente o vacía concede cero permisos y una entrada inválida impide el arranque. El registro público crea clientes. El script administrativo lee un JSON privado y reutiliza la validación y el servicio de cuentas para crear representantes. El alta y la habilitación son pasos separados. Una coincidencia con el correo de la consulta no concede acceso. [Autorización](../backend/middleware/sesion.middleware.ts) · [Configuración de IDs](../backend/config/app.config.ts) · [CLI de alta privada](../backend/scripts/crear-representante.ts) · [Procedimiento](../README.md#alta-privada-de-un-representante-ficticio).
 
 La política aprobada permite a los representantes habilitados leer la colección completa de la **demostración con datos ficticios**. El modelo carece de pertenencia por consulta. Aplicar el sistema a información real requiere reglas de pertenencia y permisos por registro. La API comprueba el permiso antes de consultar la base. La interfaz refleja el permiso y retira los datos al vencer o perder acceso. Las respuestas de cuentas y lecturas protegidas usan `Cache-Control: no-store`. [Rutas protegidas](../backend/routes/formulario.routes.ts) · [Regresión de autorización](../backend/tests/auth.http.test.ts#L275).
 
@@ -108,3 +115,9 @@ La API protege las rutas de cuentas y lecturas con HTTPS en Render y en modo pro
 En Render, el proxy termina TLS y llega a Express por HTTP. `trust proxy = 1` permite reconocer el protocolo reenviado cuando `RENDER=true` y no hay lista explícita. `TRUST_PROXY_CIDRS` tiene prioridad y fuera de Render la confianza por defecto está desactivada. El modo de un salto presupone que el proxy es la única entrada y fija el protocolo y la IP reenviados. Si otra ruta alcanza el socket directamente, la confianza por distancia también cubre ese par y permite falsificar datos reenviados. Los rangos de salida de Render no identifican esos pares de entrada. [Configuración de Express](../backend/app.ts#L33) · [TLS de Render](https://render.com/docs/web-services#connecting-from-the-public-internet) · [Confianza de proxies](https://expressjs.com/en/guide/behind-proxies/) · [Rangos de salida](https://render.com/docs/outbound-ip-addresses).
 
 El proxy TLS de prueba comprueba el login reenviado y los rechazos de protocolos ausentes o ambiguos y de pares ajenos a la lista explícita. La topología del servicio desplegado y la IP efectiva para los límites se revisan en el entorno real. [Pruebas de transporte](../backend/tests/auth.seguridad.test.ts#L150) · [Verificación operativa en Render](../README.md#render).
+
+### Separación de servicios en el despliegue
+
+Vercel sirve los archivos estáticos de Vite y reescribe las rutas configuradas a `index.html` para que React resuelva la navegación. Render ejecuta el proceso Express, que concentra la validación, la autorización y el acceso a datos. Supabase aloja PostgreSQL y permite reutilizar el esquema, los modelos y las migraciones probados con PostgreSQL local. [Build de Vercel](../frontend/vercel.json) · [Arranque de Express](../backend/index.ts) · [Conexión PostgreSQL](../backend/database/connection.ts).
+
+La interfaz y la API pueden publicarse por separado. La integración exige coordinar el destino HTTPS de `VITE_API_BASE_URL`, el origen de la interfaz en `CORS_ORIGINS` y el perfil `supabase-dev` con TLS verificado en Render. Render usa el rol de aplicación. La credencial del migrador se reserva al procedimiento de migración. [Configuración de despliegue](../README.md#despliegue-en-render-y-vercel).

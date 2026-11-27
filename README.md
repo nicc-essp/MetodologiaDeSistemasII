@@ -4,6 +4,11 @@
 
 Aplicación web para un estudio jurídico ficticio. Permite enviar consultas sin una cuenta, registrarse como cliente e iniciar sesión. Solo los representantes habilitados pueden consultar los registros de la demostración. React y Vite forman la interfaz. Express y TypeScript exponen la API. Sequelize y Umzug gestionan el acceso a PostgreSQL y las migraciones.
 
+[![Abrir la aplicación en Vercel](https://img.shields.io/badge/Interfaz-Abrir%20aplicaci%C3%B3n-1D4ED8?style=flat-square)](https://docker-laws-frontend.vercel.app/)
+[![Consultar la salud de la API en Render](https://img.shields.io/badge/API-Consultar%20salud-0F766E?style=flat-square)](https://docker-laws-backend.onrender.com/health)
+
+[Abrir la aplicación](https://docker-laws-frontend.vercel.app/) · [Consultar la salud de la API](https://docker-laws-backend.onrender.com/health)
+
 Para la defensa del Taller III, consultar [PREPARACION.md](PREPARACION.md) y la [consigna oficial](docs/Consigna_Taller_III_MSII_2026.pdf). Las razones y los límites de las decisiones se documentan en [decisiones de diseño](docs/decisiones-diseno.md).
 
 ## Instalación e inicio
